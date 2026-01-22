@@ -1,32 +1,35 @@
 %% add tools
-%scriptfld = '/media/DOCUMENTS/DOCUMENTS/EPHYS_ANALYSIS/NHP-Neuropixels';
-scriptfld = '/Users/chris/Documents/EPHYS_ANALYSIS/NHP-Neuropixels';
+scriptfld = '/media/DOCUMENTS/DOCUMENTS/EPHYS_ANALYSIS/NHP-Neuropixels';
+%scriptfld = '/Users/chris/Documents/EPHYS_ANALYSIS/NHP-Neuropixels';
 openephys_fld = fullfile(scriptfld,'OpenEphys','open-ephys-matlab-tools');
 addpath(genpath(openephys_fld));
 
 %% set paths
 %data_fld = '/media/NETDISKS/VS03/VS03_6/Neuropixels_NHP/Data_collection';
 %data_fld = '/media/chris/CK4TB/Neuropixels_NHP/Data_collection';
-data_fld = '/Users/chris/Dropbox/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+data_fld = '/home/chris/Documents/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+%data_fld = '/Users/chris/Dropbox/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+
 subject = 'm032';
 day = '20251022';
 expt = 1; rec = 6;
 ProbeLabel = 'Record Node 101';
 
-% try to load data in the current file structure
-% session = Session(fullfile(data_fld,day));
-% does not work so we need some changes
-% `Session()` expects a Record Node as root folder for the session
+%% re-order data for the tools to work
+data_root_org = fullfile(data_fld,subject,day);
+data_root_probe = fullfile(data_fld,subject,day,ProbeLabel);
+% put experiments under probe lable
+mkdir(data_root_probe);
+movefile(fullfile(data_root_org,'experiment*'),data_root_probe);
+% put it back
+%movefile(fullfile(data_root_probe,'experiment*'),data_root_org);
+%rmdir(data_root_probe)
+% add the linked folder to the path so that the toolbox can search it
+addpath(genpath(fullfile(data_root_probe,ProbeLabel)));
 
-% Create a symlink structure for the openephys tools to work
-% Note this creates an inception file structure with the Record Node
-% symlink linking to its own parent folder which means it ends up inside
-% itself. Not a problem but don't get lost. We can perhaps also remove 
-% the symlinks after extraction.
-system(sprintf('ln -s %s "%s"', ...
-    fullfile(data_fld,day), fullfile(data_fld,day,ProbeLabel)));
-session = Session(fullfile(data_fld,day));
-% session now contain the recoding info
+% cannot create a symlink on the server?
+session = Session(fullfile(data_fld,subject,day));
+% session now contain the recording info
 
 %% node refers to recording node 
 node = session.recordNodes{1};
@@ -34,7 +37,6 @@ node = session.recordNodes{1};
 %% each entry of node.recordings{} is a a run 
 % note that runs get indexed in ascending order; use the filepath under
 % node.recordings{i}.directory to identify the real run number
-
 rec = node.recordings{2}; % refers to a run/recording
 disp(rec); % see info
 
@@ -43,7 +45,6 @@ disp 'Continuous'
 for i = 1:length(rec.continuous)
     disp(['Stream ',num2str(i),': ' rec.info.continuous(i).stream_name]);
 end
-
 
 % Pick the BNC stream (PXIe-6341)
 % in this case it's stream 3
@@ -55,19 +56,14 @@ end
 BNCstream = rec.continuous(cskeys{1});
 APstream = rec.continuous(cskeys{2});
 
-%% test plot
+%% convert timebase
 trange=(1:1e5);
 achan = 5;
-%plot(BNCstream.timestamps(trange),BNCstream.samples(achan,trange))
-
-%%
-% convert timebase
 ts = 0:1/BNCstream.metadata.sampleRate:...
     (length(BNCstream.timestamps)/BNCstream.metadata.sampleRate)-1;
 ts2 = BNCstream.timestamps - BNCstream.timestamps(1);
 %plot(ts2(trange),BNCstream.samples(achan,trange))
 
-%%
 d=BNCstream.samples(achan,:);
 dd = abs(diff(d));
 ts3 = ts2(1:end-1);
@@ -77,15 +73,15 @@ ts3 = ts2(1:end-1);
 dd6k = dd>6000;
 dd6kidx = find(dd6k>0);
 tsd = diff(ts3(dd6k));
-histogram(tsd,100)
+%histogram(tsd,100)
 
 dd6kidx = dd6kidx(2:end);
 idx = [dd6kidx(1) dd6kidx(tsd>0.500)];
 
-plot(ts3,dd)
-hold on
-xline(ts3(idx),'r')
-yline(6000,'g')
+% plot(ts3,dd)
+% hold on
+% xline(ts3(idx),'r')
+% yline(6000,'g')
 
 %% check what info is available on external input
 figure;
@@ -124,7 +120,7 @@ xline(b8,'m','LineWidth',1)
 set(gca,'xlim',[0 30]);
 
 %% get the Tracker log
-load(fullfile(data_fld,day,'run-006_T-143435',...
+load(fullfile(data_fld,subject,day,'run-006_T-143435',...
     'sub-m032_ses-20251022_task-ct_stim-fgdots_run-006'));
 %%
 TrLog = [];
@@ -135,8 +131,10 @@ for i=1:length(Log.events)
 end
 
 TrLog2 = TrLog-TrLog(1)+TrOn(1);
-plot(TrLog2,10000*ones(size(TrLog2)),'ow','MarkerSize',10)
+%plot(TrLog2,10000*ones(size(TrLog2)),'ow','MarkerSize',10)
 
+% NB! onset times are not referenced to Experiment start
+% check runstim and correct if desired
 
 %% 
 corrdur =[];
@@ -147,12 +145,11 @@ end
 
 
 %% get the average response over all trials
-ch = 101:200;
+ch = 1:10;
 tw = [-0.200 0.800];
 
 APt = single(APstream.timestamps);
 APt = APt(1:4:end)-APt(1);
-
 
 RAW = single(APstream.samples(ch,:));
 FAP = zeros(size(RAW));
@@ -175,8 +172,6 @@ for i=1:size(RAW,1)
     FAP(i,:) = muafilt;
 end
 
-
-
 APd = FAP(:,1:4:end);
 ns = find(APt<=1,1,'last');
 TRIALS=[];
@@ -187,11 +182,17 @@ for i=1:length(TrOn)
     TRIALS = cat(3,TRIALS,APd(ch,si:si+ns));
 end
 
-size(TRIALS)
+%size(TRIALS)
 avgT = mean(TRIALS,3);
 
 %%
 figure; hold on;
 for c= 1:length(ch)
-    plot(APt(1:1+ns),avgT(c,:)-mean(avgT(c,:)));
+    plot(APt(1:1+ns)+tw(1),avgT(c,:)-mean(avgT(c,:)));
 end
+
+
+%% put data back in the original file structure
+rmpath(genpath(fullfile(data_root_probe,ProbeLabel)));
+movefile(fullfile(data_root_probe,'experiment*'),data_root_org);
+rmdir(data_root_probe)
