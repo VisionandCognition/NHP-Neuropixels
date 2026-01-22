@@ -169,17 +169,36 @@ for i=1:size(RAW,1)
     dum1 = filtfilt(B,A,S);
     dum2 = abs(dum1);
     muafilt = filtfilt(D,C,dum2);
-    FAP(i,:) = muafilt;
+    
+
+    % remove 50 Hz (line) and 60 Hz (monitor)
+    buttLoop = muafilt;
+    for i=1:5
+        d = designfilt('bandstopiir','FilterOrder',2,...
+            'HalfPowerFrequency1',50*i-5,...
+            'HalfPowerFrequency2',50*i+5,...
+            'DesignMethod','butter','SampleRate',Fs);
+        buttLoop = filtfilt(d,buttLoop);
+    end
+    for i=1:5
+        d = designfilt('bandstopiir','FilterOrder',2,...
+            'HalfPowerFrequency1',60*i-5,...
+            'HalfPowerFrequency2',60*i+5,...
+            'DesignMethod','butter','SampleRate',Fs);
+        buttLoop = filtfilt(d,buttLoop);
+    end
+    FAP(i,:) = buttLoop';
 end
 
 APd = FAP(:,1:4:end);
+clear RAW muafilt S APstream dum1 dum2 FAP
 ns = find(APt<=1,1,'last');
 TRIALS=[];
 
 for i=1:length(TrOn)
     tr0 = (i);
     si = find(APt>=tr0,1,'first');
-    TRIALS = cat(3,TRIALS,APd(ch,si:si+ns));
+    TRIALS = cat(3,TRIALS,APd(:,si:si+ns));
 end
 
 %size(TRIALS)
