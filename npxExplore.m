@@ -1,18 +1,20 @@
 %% add tools
-scriptfld = '/media/DOCUMENTS/DOCUMENTS/EPHYS_ANALYSIS/NHP-Neuropixels';
-%scriptfld = '/Users/chris/Documents/EPHYS_ANALYSIS/NHP-Neuropixels';
+scriptfld = pwd();
 openephys_fld = fullfile(scriptfld,'OpenEphys','open-ephys-matlab-tools');
 addpath(genpath(openephys_fld));
 
 %% set paths
 %data_fld = '/media/NETDISKS/VS03/VS03_6/Neuropixels_NHP/Data_collection';
 %data_fld = '/media/chris/CK4TB/Neuropixels_NHP/Data_collection';
-data_fld = '/home/chris/Documents/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
-%data_fld = '/Users/chris/Dropbox/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+if ismac
+    data_fld = '/Users/chris/Dropbox/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+else
+    data_fld = '/home/chris/Documents/CURRENT_PROJECTS/NEUROPIXELS/Sample_Data';
+end
 
 subject = 'm032';
 day = '20251022';
-expt = 1; rec = 6;
+expt = 1; rec = 1;
 ProbeLabel = 'Record Node 101';
 
 %% re-order data for the tools to work
@@ -21,6 +23,7 @@ data_root_probe = fullfile(data_fld,subject,day,ProbeLabel);
 % put experiments under probe lable
 mkdir(data_root_probe);
 movefile(fullfile(data_root_org,'experiment*'),data_root_probe);
+
 % put it back
 %movefile(fullfile(data_root_probe,'experiment*'),data_root_org);
 %rmdir(data_root_probe)
@@ -34,7 +37,7 @@ session = Session(fullfile(data_fld,subject,day));
 %% node refers to recording node 
 node = session.recordNodes{1};
 
-%% each entry of node.recordings{} is a a run 
+% each entry of node.recordings{} is a a run 
 % note that runs get indexed in ascending order; use the filepath under
 % node.recordings{i}.directory to identify the real run number
 rec = node.recordings{2}; % refers to a run/recording
@@ -84,11 +87,11 @@ idx = [dd6kidx(1) dd6kidx(tsd>0.500)];
 % yline(6000,'g')
 
 %% check what info is available on external input
-figure;
-for i=1:8
-    subplot(8,1,i);
-    plot(BNCstream.samples(i,:))
-end
+% figure;
+% for i=1:8
+%     subplot(8,1,i);
+%     plot(BNCstream.samples(i,:))
+% end
 
 %% check what info is available as events
 % looked at XL's scripts
@@ -145,14 +148,16 @@ end
 
 
 %% get the average response over all trials
-ch = 1:10;
+basechan = 21; numchan = 10;
+ch = basechan:basechan+numchan-1;
 tw = [-0.200 0.800];
 
 APt = single(APstream.timestamps);
-APt = APt(1:4:end)-APt(1);
+APt = APt(1:30:end)-APt(1);
 
 RAW = single(APstream.samples(ch,:));
-FAP = zeros(size(RAW));
+RRAW = RAW-mean(RAW);
+FAP = zeros(size(RRAW));
 
 % get MUA envelope
 Fs = APstream.metadata.sampleRate;
@@ -164,34 +169,33 @@ Fl = 200;
 [D,C] = butter(N,Fl/Fn,'low');
 
 for i=1:size(RAW,1)
-    disp(['Channel ' num2str(i)])
-    S=RAW(i,:);
+    disp(['Channel ' num2str(ch(i))])
+    S=RRAW(i,:);
     dum1 = filtfilt(B,A,S);
     dum2 = abs(dum1);
     muafilt = filtfilt(D,C,dum2);
     
-
     % remove 50 Hz (line) and 60 Hz (monitor)
     buttLoop = muafilt;
-    for i=1:5
+    for j=1:5
         d = designfilt('bandstopiir','FilterOrder',2,...
-            'HalfPowerFrequency1',50*i-5,...
-            'HalfPowerFrequency2',50*i+5,...
+            'HalfPowerFrequency1',50*j-5,...
+            'HalfPowerFrequency2',50*j+5,...
             'DesignMethod','butter','SampleRate',Fs);
         buttLoop = filtfilt(d,buttLoop);
     end
-    for i=1:5
+    for j=1:5
         d = designfilt('bandstopiir','FilterOrder',2,...
-            'HalfPowerFrequency1',60*i-5,...
-            'HalfPowerFrequency2',60*i+5,...
+            'HalfPowerFrequency1',60*j-5,...
+            'HalfPowerFrequency2',60*j+5,...
             'DesignMethod','butter','SampleRate',Fs);
         buttLoop = filtfilt(d,buttLoop);
     end
     FAP(i,:) = buttLoop';
 end
 
-APd = FAP(:,1:4:end);
-clear RAW muafilt S APstream dum1 dum2 FAP
+APd = downsample(FAP',30)';
+%clear RAW muafilt S dum1 dum2 FAP
 ns = find(APt<=1,1,'last');
 TRIALS=[];
 
@@ -207,8 +211,10 @@ avgT = mean(TRIALS,3);
 %%
 figure; hold on;
 for c= 1:length(ch)
-    plot(APt(1:1+ns)+tw(1),avgT(c,:)-mean(avgT(c,:)));
+    plot(APt(1:1+ns)+tw(1),smooth(avgT(c,:)-mean(avgT(c,:)),50));
 end
+xline(0,'--');
+xline(0.1,'-');
 
 
 %% put data back in the original file structure
