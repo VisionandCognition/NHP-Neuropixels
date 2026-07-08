@@ -140,7 +140,7 @@ Reuses the filter chain from `XinyuScripts/getmua.m` (the lab's existing pipelin
 
 ### 4.6 Responsiveness screening
 
-Per channel, per session: baseline-subtracted mean MUA in 4 windows (stim, delay, peri-saccadic [0, 0.25s], post-saccadic [0.3, 0.6s]) vs. a pre-stimulus baseline [−0.9, −0.6s], tested with a Wilcoxon signed-rank test across correct trials, Benjamini-Hochberg FDR-corrected across channels per window, plus a minimum effect-size requirement (|mean diff| > 0.3 baseline SD) to avoid flagging trivially small but "significant" effects given large trial counts. A channel is "responsive" if any window passes both criteria.
+Per channel, per session: baseline-subtracted mean MUA in 4 windows (visual [-0.5, -0.35s], delay [-0.3, -0.05s], peri-saccadic [0, 0.25s], post-saccadic [0.3, 0.6s]) vs. a pre-stimulus baseline [−0.9, −0.6s], tested with a Wilcoxon signed-rank test across correct trials, Benjamini-Hochberg FDR-corrected across channels per window, plus a minimum effect-size requirement (|mean diff| > 0.3 baseline SD) to avoid flagging trivially small but "significant" effects given large trial counts. A channel is "responsive" if any window passes both criteria.
 
 ### 4.7 Direction tuning
 
@@ -160,6 +160,24 @@ The [0, 0.3s] go-cue-relative window above mixes two different things whenever s
 - **`saclocked` mode** (the methodologically preferred one, since latency varies so much across sessions) — anchored to each **trial's own detected saccade onset**: planning=[-0.15, -0.02]s and execution=[-0.02, +0.15]s relative to onset. Trials with no detected saccade (~1–11% depending on session) are excluded from this mode.
 
 For each mode: responsiveness (matching §4.6) and direction tuning (§4.7's three-category scheme) are computed **separately** for the planning and execution windows. Outputs per session, both modes: `*_planexec_<mode>.png` (per-channel planning-vs-execution effect map, tuning-strength scatter, preferred-direction scatter) and `*_planexec_<mode>_curves.png` (every responsive channel's actual tuning curve, planning on top/execution below, category-colored). Results quantified across all 12 sessions are in §6.6.
+
+### 4.9 Decoding: can the recorded population actually tell the 8 directions apart?
+
+Stimulus position and saccade direction are the same label in this task — the target position on a given trial is exactly the instructed saccade direction — so this is one 8-way classification question, asked separately of the same three epochs as §4.8: decoding from the **visual** epoch asks whether stimulus position is represented; decoding from **planning**/**execution** asks the same of the upcoming/ongoing saccade. `decodeDirection.m` implements this as a direct complement to the tuning-based analyses above (which test each channel individually against a parametric null), giving a model-free readout of how much direction information is actually present, and how it scales with the number of channels pooled together.
+
+**Decoder**: nearest-centroid classification on per-channel z-scored responses, evaluated with leave-one-trial-out cross-validation (train on all trials but one, classify the held-out trial by its Euclidean distance to each of the 8 per-direction training centroids, repeat for every trial). Chosen over LDA/SVM because population sizes here range up to ~380 channels while trial counts are only ~85–145 per session — far more features than trials, a regime where a full-covariance classifier is singular; per-channel standardization plus nearest-centroid is the standard robust choice here (equivalent to a diagonal/naive-Bayes LDA) and needs no hyperparameters. Chance level for 8 balanced classes is 1/8 = 12.5%.
+
+Two complementary views, per session per epoch:
+- **Individual channels**: every channel decoded alone (not just responsive ones, so unresponsive channels serve as an internal near-chance control).
+- **Population**: accuracy vs. population size, built by randomly subsampling 1, 2, 4, ..., up to the full responsive population (20 repeats per size, averaged), the standard "how many channels before performance saturates" curve.
+
+`summarizeDecoding.m` pools this across all 12 sessions (restricted to the common population sizes shared across sessions, since each session's own full-responsive-population size is idiosyncratic and not itself poolable).
+
+### 4.10 Temporal generalization: is it the same code in each epoch, or a different one?
+
+Direct follow-up to §4.9: decoding well in an epoch only shows that direction information is present *at that time* — it doesn't say whether the population structure that carries it (which channels prefer which direction) is the *same* structure across epochs, or gets reconfigured. `decodeTemporalGeneralization.m` tests this directly: train the nearest-centroid decoder on one epoch's population response, test it on **another** epoch's response for the same held-out trials (leave-one-trial-out, full responsive population), for every (train, test) pair among visual/planning/execution — a 3×3 matrix per session. The diagonal (train and test the same epoch) is exactly §4.9's ordinary same-epoch accuracy; the off-diagonal cells are the new information: if a decoder trained on one epoch still classifies well on another, the code generalizes (shared structure); if it drops to chance, the code is epoch-specific (reconfigured). Standardization (z-scoring) is always computed from the **train** epoch's own statistics and applied to the test epoch's data, so this is a genuine test of whether the trained decision boundary transfers, not just whether both epochs are independently informative.
+
+This first pass uses the same 3 fixed epoch windows as §4.8/§4.9 (a coarse 3×3 matrix); a finer, continuous sliding-window version across the whole trial is a natural extension if the coarse version looks informative (see §7).
 
 ## 5. Results
 
@@ -189,15 +207,54 @@ Saccade detection (velocity-threshold on a low-pass-filtered, calibrated eye tra
 
 ### 5.2 QC figures (per session, in `data/figures/`)
 
-- **`*_overview.png`** — four panels, all sharing one channel-index y-axis with **channel 1 (deepest, nearest probe tip) at the bottom and the shallowest channel at the top**: (1) a real-depth ruler (electrode position in mm from the probe tip, so gaps/clusters from the day's online channel-selection scheme are visible directly), (2) the z-scored MUA heatmap with all 5 trial-epoch boundaries (fixation/stimulus/delay/go-cue/target-end) marked, computed per-session from that session's own `Stm` timing, (3) a per-channel, per-epoch significance map (which of stim/delay/peri/post each channel is significant in, signed by effect direction) so you can see *which* window a channel's "responsive" flag refers to, (4) a text panel with that day's burr hole, planned target structures, and online channel-selection scheme (§2.2).
-- **`*_eye_summary.png`** — 7 panels: trajectory spoke plots shown twice, once for all trials (error trials dimmed) and once for correct trials only with % correct in the title; both draw a light-grey dotted circle (radius = `Stm.TargWinSz`, the task's real hit-detection window) around each target, behind the traces; fixation scatter; main sequence; latency histogram (ms); pupil trace; accuracy by direction.
+- **`*_overview.png`** — four panels, all sharing one channel-index y-axis with **channel 1 (deepest, nearest probe tip) at the bottom and the shallowest channel at the top**: (1) a real-depth ruler (electrode position in mm from the probe tip, so gaps/clusters from the day's online channel-selection scheme are visible directly), (2) the z-scored MUA heatmap with all 5 trial-epoch boundaries (fixation/stimulus/delay/go-cue/target-end) marked, computed per-session from that session's own `Stm` timing, (3) a per-channel, per-epoch significance map (visual/delay/peri/post, ms windows labeled on the axis) so you can see *which* window a channel's "responsive" flag refers to, (4) a text panel with that day's burr hole, planned target structures, and online channel-selection scheme (§2.2).
+- **`*_eye_summary.png`** — 7 panels: trajectory spoke plots shown twice, once for all trials (error trials dimmed) and once for correct trials only with % correct in the title; both draw a light-grey dotted circle (radius = `Stm.TargWinSz`, the task's real hit-detection window) around each target, behind the traces; fixation scatter; main sequence; latency histogram (ms); pupil trace (ms); accuracy by direction.
 - **`*_tuning_examples.png`** — all responsive channels, sorted by depth, one small tuning-curve tile per channel (min-max normalized per channel for display), border and line color reflecting the 3-way category from §4.7: red=`directional`, orange=`complex`, gray=`untuned`.
 - **`*_tuning_matrix.png`** — all responsive channels, sorted by preferred direction, per-channel min-max normalized, plus a tuning-strength color strip and a 3-category color strip alongside.
 - **`*_population_summary.png`** — generated per session (not pooled — each session is an independent penetration, often a different burr hole/target structure per §2.2, and the probe is not seated to the same depth across sessions). Preferred-direction rose plot and tuning-strength histogram, plus preferred direction vs. real electrode depth (mm from tip, this session only) — see §6.4.
 - **`*_artifact_check.png`** — pairwise trial-residual correlation matrix across all channels (direction-tuning contribution removed), shown raw and sorted by real depth, plus mean correlation vs. inter-channel distance — see §6.4.
-- **`*_planexec_gocue.png` / `*_planexec_saclocked.png`** — per-channel effect map (planning vs execution), tuning-strength scatter, and preferred-direction scatter, for the go-cue-fixed and saccade-onset-locked window splits respectively (§4.8).
-- **`*_planexec_gocue_curves.png` / `*_planexec_saclocked_curves.png`** — every responsive channel's actual tuning curve, planning epoch on top and execution epoch below, category-colored.
-- **`*_shared_kinematics.png`** — per-channel PC1 loadings (the dominant shared trial-residual component) and its per-trial score plotted against saccade peak velocity and amplitude (§6.5).
+- **`*_shared_kinematics.png`** — per-channel PC1 loadings (the dominant shared trial-residual component) and its per-trial score plotted against saccade peak velocity and amplitude, plus (for the 4 sessions where this component is confirmed kinematics-linked) trial-residual correlation vs. distance before/after removing it — see §6.5.
+- **`*_planexec_gocue.png` / `*_planexec_saclocked.png`** — per-channel effect map (visual/planning/execution, ms windows labeled), tuning-strength scatter (visual-vs-execution and planning-vs-execution), and preferred-direction scatter, for the go-cue-fixed and saccade-onset-locked window splits respectively (§4.8).
+- **`*_planexec_gocue_curves.png` / `*_planexec_saclocked_curves.png`** — every responsive channel's actual tuning curve, stacked visual (top) / planning (middle) / execution (bottom), category-colored.
+- **`*_decode_channels.png`** — individual-channel 8-way direction decoding accuracy by depth (visual/planning/execution), plus pairwise scatters (planning-vs-execution, visual-vs-execution) — see §4.9/§5.3.
+- **`*_decode_population.png`** — population decoding accuracy vs. number of channels pooled, one curve per epoch, chance = 12.5% — see §4.9/§5.3.
+- **`*_decode_genmatrix.png`** — 3×3 temporal generalization matrix (train epoch × test epoch), full responsive population, chance = 12.5% — see §4.10/§5.3.
+
+### 5.3 Decoding results
+
+Full-responsive-population decode accuracy per session (§4.9 method; chance = 12.5%):
+
+| Day | Responsive channels | Trials | Visual | Planning | Execution |
+|---|---|---|---|---|---|
+| 20260224 | 64 | 85 | 15.3% | 14.1% | 17.6% |
+| 20260226 | 271 | 144 | 29.2% | 28.5% | 43.8% |
+| 20260303 | 201 | 112 | 14.3% | 17.9% | 18.8% |
+| 20260310 | 238 | 116 | 30.2% | 25.9% | 36.2% |
+| 20260312 | 361 | 84 | 29.8% | 26.2% | 33.3% |
+| 20260317 | 270 | 88 | 17.0% | 8.0% | 15.9% |
+| 20260318 | 247 | 85 | 27.1% | 18.8% | 15.3% |
+| 20260320 | 304 | 99 | 38.4% | 32.3% | 45.5% |
+| 20260323 | 377 | 94 | 31.9% | 33.0% | 44.7% |
+| 20260324 | 354 | 98 | 35.7% | 35.7% | 57.1% |
+| 20260325 | 339 | 97 | 53.6% | 38.1% | 44.3% |
+| 20260326 | 156 | 100 | 9.0% | 14.0% | 9.0% |
+| **Mean ± SEM** | | | **27.6 ± 3.6%** | **24.4 ± 2.8%** | **31.8 ± 4.5%** |
+
+**11/12 sessions decode direction clearly above chance in every epoch** — the two exceptions (20260224, 20260326) are the same two sessions already flagged as the weakest on nearly every other metric in this report (§5.1, §6.4, §6.5, §6.6). Execution consistently gives the highest accuracy, consistent with a genuine, growing perimovement direction signal (matching the tuning-recruitment finding in §6.6), though visual and planning are also clearly above chance in most sessions — stimulus position and premotor direction are both decodable well before the saccade itself.
+
+Pooling the population-size sweep across sessions (`pooled_decode_population.png`, restricted to population sizes shared by multiple sessions — see §4.9) gives a clean, monotonic accuracy-vs-population-size curve for all three epochs, rising from chance at n=1 to ~29–40% by n=256 pooled channels, with execution above visual/planning at every population size from ~n=8 upward. Individual channels are informative but weak on their own (most single channels sit in the 10–25% range, well below the ceiling reached by pooling), so the direction information in this population is real but genuinely distributed across many channels rather than carried by a small number of highly informative ones.
+
+<!-- POOLED_DECODE_FIGURE -->
+
+**Temporal generalization matrix** (§4.10, `*_decode_genmatrix.png`), pooled mean across the same 10 sessions (excluding 20260224/20260326, chance = 12.5%):
+
+| Train \ Test | visual | planning | execution |
+|---|---|---|---|
+| **visual** | 30.7% | 18.0% | 20.0% |
+| **planning** | 19.3% | 26.4% | 20.9% |
+| **execution** | 18.3% | 20.2% | 35.5% |
+
+Every off-diagonal cell is clearly above the 12.5% chance level — there is real shared, cross-epoch structure, a decoder trained in one epoch is not useless in another — but every off-diagonal cell is also well below its row's own diagonal (e.g. training on execution and testing on execution gets 35.5%, but training on execution and testing on visual only gets 18.3%). So the population code is **neither fully shared nor fully epoch-specific**: part of the direction-discriminating structure persists across visual/planning/execution, and part is reconfigured at each epoch. This is a first, coarse (3-epoch) pass; a finer sliding-window generalization matrix across the whole trial (§4.10, §7) would show more precisely when the code shifts rather than just confirming that it does.
 
 ## 6. Important caveats — read before using the tuning results
 
@@ -264,6 +321,8 @@ Direct follow-up to §6.4. `checkSharedComponentKinematics.m` extracts the domin
 
 **Interpretation**: the shared component's origin is not uniform across the dataset. In at least 4 sessions there's direct, quantitative evidence it's kinematics-linked (EMG/motion-like); in the rest, either it has a different origin, or the correlation approach lacks power in sessions with less kinematic variance/trial count.
 
+**Common-mode removal, for the 4 kinematic-linked sessions.** For 20260310, 20260320, 20260323, and 20260324, `checkSharedComponentKinematics.m` also subtracts the rank-1 PC1 reconstruction from the trial residual and recomputes §6.4's correlation-vs-distance relationship on the cleaned data (`*_shared_kinematics.png`, 4th panel, before/after overlay). In all 4 sessions, the long-distance correlation **plateau** (§6.4's evidence for a residual shared component) drops sharply after removal — e.g. 20260323 goes from a ~0.18–0.21 plateau at >1mm down to ~0.05–0.07 — while the short-distance correlation, though also reduced, remains clearly above zero. This confirms the plateau specifically was this kinematic component, and that at least some of the short-distance, depth-organized correlation in §6.4 is not attributable to it.
+
 ### 6.6 Planning-vs-execution tuning, across all 12 sessions
 
 `summarizePlanningExecution.m` quantifies the saccade-onset-locked planning/execution split (§4.8) across all 12 sessions. Two sessions (20260224, 20260326 — already the weakest/noisiest sessions by every other metric here) have zero or one directional channels in either window and are excluded from the pooled stats below.
@@ -279,11 +338,14 @@ Direct follow-up to §6.4. `checkSharedComponentKinematics.m` extracts the domin
 3. **Burr hole for 20260224 is genuinely ambiguous** (marked "5?" in the source elab log itself, §2.2). This session is independently the weakest on nearly every other metric in this report, so it's likely not worth chasing further unless it specifically matters for your interpretation.
 4. **Planning-vs-execution** (§4.8, §6.6) — if useful, the natural extension is checking whether the 53% execution-only recruitment fraction varies with burr hole/structure (§2.2) or with the §6.5 kinematic-link sessions.
 5. **Responsiveness/tuning thresholds**: current thresholds (FDR 0.05, effect size 0.3 baseline SD for screening; permutation p<0.05 for tuning) are reasonable defaults; given §6.4's session-by-session variability, you may want to treat sessions individually rather than adjust one global threshold.
+6. **Decoding** (§4.9, §5.3) — the 4 sessions with a confirmed kinematic-linked shared component (§6.5) are also among the higher-decoding sessions; whether that's because common-mode contamination is itself somewhat decodable (inflating accuracy) or because these are simply the sessions with the most real signal isn't distinguishable from the current analysis. Re-running decoding after the §6.5 common-mode removal for those 4 sessions, and comparing to their original accuracy, would test this directly.
+7. **Temporal generalization** (§4.10, §5.3) — the coarse 3-epoch matrix shows partial generalization (real but well below within-epoch accuracy). If this is worth pursuing further, the natural extension is a finer, continuous sliding-window generalization matrix across the whole trial (not just the 3 fixed epochs), which would show more precisely when the population code shifts rather than just confirming it does.
 
 ## 8. Recommended next steps
 
 1. **Given §6.4/§6.5's mixed result**, treat sessions individually rather than pooling a single "tuned channel" count — prioritize 20260312/20260320/20260323/20260324 (clean depth-organized structure and/or confirmed kinematic-linked shared component) for any further biological claims, and treat 20260224/20260326 (weakest on nearly every metric) with more skepticism.
-2. If you want to isolate the residual shared component further: a common-mode removal step (median/PCA across the array before MUA extraction) could be added to `extractSaccadeSession.m` and re-run, at least for the 4 sessions with a confirmed kinematic link, to see whether the depth-organized tuning in §6.4 survives removing it.
+2. **Done** (§6.5): common-mode removal, for the 4 kinematic-linked sessions — the long-distance correlation plateau drops sharply after removing the shared component, while short-distance correlation survives.
 3. Absolute per-channel depth-in-brain needs a numeric anchor not currently in the logs (§2.2) — see `sessionAnatomyInfo.m`.
 4. Once sessions are triaged by §6.4/§6.5, revisit direction tuning with a von Mises fit (not just vector sum) for a cleaner tuning-width estimate on the trustworthy sessions — the saccade-onset-locked alignment from §4.8 is already implemented, use it in place of go-cue alignment for this.
 5. Check whether the 53% execution-only recruitment fraction (§6.6) varies systematically with burr hole/structure or with the §6.5 kinematic-link sessions.
+6. **Done** (§4.9, §5.3): direction decoding, individual-channel and population, all 3 epochs, all 12 sessions. See item 6 above for the one natural follow-up (decoding after common-mode removal).

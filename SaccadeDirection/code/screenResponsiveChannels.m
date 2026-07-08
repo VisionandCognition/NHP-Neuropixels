@@ -1,14 +1,18 @@
 function screening = screenResponsiveChannels(sessions, opts)
 % SCREENRESPONSIVECHANNELS Test every channel in every session for a
-% response to any part of the saccade task (stim / delay / peri-saccadic
-% / post-saccadic), relative to a pre-stimulus fixation baseline.
+% response to any part of the saccade task (visual / delay / peri-saccadic
+% / post-saccadic), relative to a pre-stimulus fixation baseline. "visual"
+% is the response to the target/stimulus FLASH itself -- a genuine epoch
+% of interest in its own right (is this channel visually responsive to
+% where the target appeared, independent of anything saccade-related?),
+% not just a catch-all early window.
 %
 % screening = screenResponsiveChannels(sessions, opts)
 %   sessions : struct array from loadAllSessions()
 %   opts.windows : struct of [t0 t1] windows (s, relative to targ_start /
 %                  go-cue). Defaults cover the fixed 8targ trial timing
 %                  (FIXT 300 + STIMT 100 + DELAYT 400 ms before targ_start):
-%       baseline [-0.9 -0.6], stim [-0.5 -0.35], delay [-0.3 -0.05],
+%       baseline [-0.9 -0.6], visual [-0.5 -0.35], delay [-0.3 -0.05],
 %       peri [0 0.25], post [0.3 0.6]
 %   opts.alpha       : FDR-corrected significance threshold (default 0.05)
 %   opts.minEffect   : minimum |effect size| (window mean diff / baseline SD)
@@ -22,7 +26,7 @@ function screening = screenResponsiveChannels(sessions, opts)
 if nargin < 2, opts = struct(); end
 opts = setDefault(opts, 'windows', struct( ...
     'baseline', [-0.9 -0.6], ...
-    'stim',     [-0.5 -0.35], ...
+    'visual',   [-0.5 -0.35], ...
     'delay',    [-0.3 -0.05], ...
     'peri',     [0    0.25], ...
     'post',     [0.3  0.6]));
@@ -183,28 +187,38 @@ ylabel(axDepth, 'Channel # (1 = deepest / probe tip)');
 title(axDepth, 'Real depth');
 grid(axDepth, 'on');
 
-% --- Panel 2 (wide): full-probe z-scored MUA heatmap
+% --- Panel 2 (wide): full-probe z-scored MUA heatmap. Time axis in ms
+% (not s) throughout this pipeline's figures, per convention.
 axMain = nexttile(tl, 3, [1 5]);
-imagesc(axMain, S.tb, chIdx, meanMUAz);
+tbMs = S.tb * 1000;
+imagesc(axMain, tbMs, chIdx, meanMUAz);
 set(axMain, 'CLim', [-3 3], 'YDir', 'normal', 'Color', 'w');
 colormap(axMain, parula);
 cb = colorbar(axMain); cb.Label.String = 'z (baseline SD)';
-xlabel(axMain, 'Time from go-cue (s)');
+xlabel(axMain, 'Time from go-cue (ms)');
 ylabel(axMain, 'Channel # (1 = deepest / probe tip)');
 title(axMain, sprintf('%s run-%03d: mean MUA, z-scored to baseline (correct trials, deep=bottom)', S.Day, S.RunN));
 ylim(axMain, [1 nChan]);
 hold(axMain, 'on');
 evHandles = gobjects(1, numel(evT));
 for e = 1:numel(evT)
-    xline(axMain, evT(e), '-', 'Color', evColor{e}, 'LineWidth', 2.5);
+    xline(axMain, evT(e)*1000, '-', 'Color', evColor{e}, 'LineWidth', 2.5);
     evHandles(e) = plot(axMain, nan, nan, '-', 'Color', evColor{e}, 'LineWidth', 2.5); % legend proxy
 end
-legend(axMain, evHandles, evLabel, 'Location', 'northoutside', 'Orientation', 'horizontal', ...
+evLabelMs = arrayfun(@(t,l) sprintf('%s (%.0fms)', l{1}, t*1000), evT, evLabel, 'UniformOutput', false);
+legend(axMain, evHandles, evLabelMs, 'Location', 'northoutside', 'Orientation', 'horizontal', ...
     'Box', 'off', 'TextColor', 'k', 'FontSize', 8);
 
 % --- Panel 3 (medium): which task epoch each channel is significant in
 % (sign + magnitude of the effect, gray/transparent where not
-% significant), using the same channel-index y-axis as panel 2.
+% significant), using the same channel-index y-axis as panel 2. Includes
+% the "stim" epoch -- the visual response to target/stimulus presentation
+% itself (before the delay period, well before any saccade) -- alongside
+% delay/peri-saccadic/post-saccadic, so visual responsiveness is treated
+% as its own epoch of interest, not folded into a generic "responsive"
+% flag. X-axis labels show the actual ms window used for each epoch, read
+% directly from opts.windows rather than hardcoded, so they can't drift
+% out of sync with the analysis.
 axEpoch = nexttile(tl, 8, [1 3]);
 sigMask = sc.fdrP < opts.alpha & abs(sc.effect) > opts.minEffect;
 epochEffect = sc.effect;
@@ -212,10 +226,16 @@ epochEffect(isnan(epochEffect)) = 0;
 imagesc(axEpoch, 1:numel(winNames), chIdx, epochEffect, 'AlphaData', double(sigMask));
 set(axEpoch, 'CLim', [-2 2], 'YDir', 'normal', 'Color', [0.85 0.85 0.85]);
 colormap(axEpoch, redblue(256));
-set(axEpoch, 'XTick', 1:numel(winNames), 'XTickLabel', winNames, 'XTickLabelRotation', 30);
+% NB: embedded '\n' inside a single XTickLabel cell entry does not
+% reliably render as two stacked lines when this figure is saved
+% off-screen ('Visible','off') -- each "line" ends up assigned to a
+% different tick instead of stacking under the same one. Single-line
+% labels avoid the ambiguity entirely.
+winLabels = cellfun(@(w) sprintf('%s [%.0f,%.0f]ms', w, opts.windows.(w)(1)*1000, opts.windows.(w)(2)*1000), winNames, 'UniformOutput', false);
+set(axEpoch, 'XTick', 1:numel(winNames), 'XTickLabel', winLabels, 'XTickLabelRotation', 30, 'FontSize', 7);
 cb2 = colorbar(axEpoch); cb2.Label.String = 'effect (baseline SD)';
 ylim(axEpoch, [1 nChan]);
-title(axEpoch, 'Significant epoch(s) per channel');
+title(axEpoch, sprintf('Significant epoch(s) per channel (baseline [%.0f,%.0f]ms)', baseWin(1)*1000, baseWin(2)*1000));
 ylabel(axEpoch, '');
 
 % --- Panel 4 (narrow): text annotation, planned trajectory / channel

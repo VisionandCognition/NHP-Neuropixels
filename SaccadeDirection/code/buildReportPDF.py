@@ -29,24 +29,27 @@ DAYS = ['20260224','20260226','20260303','20260310','20260312','20260317',
 RUN_OVERRIDE = {'20260224': '001'}  # all others are run-003
 
 FIG_ORDER = [
-    ('overview', 'Overview: full-probe MUA heatmap, real-depth ruler, per-epoch significance map, anatomy annotation'),
-    ('eye_summary', 'Eye summary: trajectories, fixation, main sequence, latency, pupil, accuracy by direction'),
+    ('overview', 'Overview: full-probe MUA heatmap, real-depth ruler, per-epoch significance map (visual/delay/peri/post, ms windows labeled), anatomy annotation'),
+    ('eye_summary', 'Eye summary: trajectories, fixation, main sequence, latency, pupil, accuracy by direction (all times in ms)'),
     ('tuning_examples', 'All responsive channels: tuning curves, category-colored (red=directional, orange=complex, gray=untuned)'),
     ('tuning_matrix', 'Tuning matrix: all responsive channels sorted by preferred direction, with strength and category strips'),
     ('population_summary', 'Population summary (this session only): preferred direction, tuning strength, vs. real depth'),
     ('artifact_check', 'Shared-artifact check: trial-residual correlation matrix and vs. distance'),
-    ('shared_kinematics', 'Shared component vs. kinematics: PC1 loadings and correlation with peak velocity/amplitude'),
-    ('planexec_gocue', 'Planning vs execution (go-cue-anchored): effect map, tuning-strength and preferred-direction scatter'),
-    ('planexec_gocue_curves', 'Planning vs execution (go-cue-anchored): per-channel tuning curves, planning (top) vs execution (bottom)'),
-    ('planexec_saclocked', 'Planning vs execution (saccade-onset-locked): effect map, tuning-strength and preferred-direction scatter'),
-    ('planexec_saclocked_curves', 'Planning vs execution (saccade-onset-locked): per-channel tuning curves, planning (top) vs execution (bottom)'),
+    ('shared_kinematics', 'Shared component vs. kinematics: PC1 loadings, correlation with peak velocity/amplitude, and (where kinematic-linked) common-mode removal before/after'),
+    ('planexec_gocue', 'Visual / planning / execution (go-cue-anchored, ms windows labeled): effect map, tuning-strength and preferred-direction scatter'),
+    ('planexec_gocue_curves', 'Visual / planning / execution (go-cue-anchored): per-channel tuning curves, stacked visual/planning/execution'),
+    ('planexec_saclocked', 'Visual / planning / execution (saccade-onset-locked, ms windows labeled): effect map, tuning-strength and preferred-direction scatter'),
+    ('planexec_saclocked_curves', 'Visual / planning / execution (saccade-onset-locked): per-channel tuning curves, stacked visual/planning/execution'),
+    ('decode_channels', 'Direction decoding, individual channels: accuracy by depth, planning-vs-execution and visual-vs-execution scatters with marginal histograms'),
+    ('decode_population', 'Direction decoding, population: accuracy vs. number of channels pooled, chance=12.5%'),
+    ('decode_genmatrix', 'Temporal generalization matrix: train epoch x test epoch, chance=12.5%'),
 ]
 
 CSS = """
 body { font-family: -apple-system, Helvetica, Arial, sans-serif; max-width: 900px; margin: 2em auto; padding: 0 1em; line-height: 1.45; color: #111; }
 h1 { font-size: 1.8em; border-bottom: 2px solid #333; padding-bottom: 0.2em; }
-h2 { font-size: 1.4em; margin-top: 2em; border-bottom: 1px solid #999; padding-bottom: 0.15em; page-break-before: always; }
-h3 { font-size: 1.15em; margin-top: 1.5em; }
+h2 { font-size: 1.4em; margin-top: 2em; border-bottom: 1px solid #999; padding-bottom: 0.15em; page-break-before: always; page-break-after: avoid; }
+h3 { font-size: 1.15em; margin-top: 1.5em; page-break-after: avoid; }
 table { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
 th, td { border: 1px solid #999; padding: 4px 8px; text-align: left; }
 th { background: #eee; }
@@ -55,6 +58,22 @@ pre { background: #f2f2f2; padding: 0.7em; border-radius: 4px; overflow-x: auto;
 img { max-width: 100%; display: block; margin: 0.5em 0 1em 0; border: 1px solid #ccc; }
 strong { color: #000; }
 hr { border: none; border-top: 1px solid #ccc; margin: 2em 0; }
+.figblock { page-break-inside: avoid; break-inside: avoid; margin-bottom: 1.2em; }
+.figblock p { margin: 0 0 0.3em 0; }
+/* The two *_curves figures are routinely 5-10 page-heights tall (one
+   responsive channel = 3 stacked rows). Verified directly (minimal
+   repro): ANY explicit page-break/break-* directive on a container
+   whose image child is taller than one full page -- page-break-inside:
+   avoid, page-break-before:always, either one alone -- causes Chrome's
+   headless print-to-pdf to insert an EXTRA, unwanted break immediately
+   after the caption, orphaning it a page early. Plain, undecorated flow
+   (no break CSS at all) is the only thing that keeps the caption and the
+   image's start on the same page for oversized content; the image then
+   splits naturally across subsequent pages, which is unavoidable and
+   fine. So this class intentionally carries no page-break/break-*
+   properties. */
+.figblock-newpage { margin-bottom: 1.2em; }
+.figblock-newpage p { margin: 0 0 0.3em 0; }
 """
 
 
@@ -69,8 +88,15 @@ def build_appendix() -> str:
             if not fn.exists():
                 lines.append(f'*(missing: {fn.name})*\n')
                 continue
-            lines.append(f'**{caption}**\n')
-            lines.append(f'![{day} run-{run} {suffix}]({fn})\n')
+            # Caption + image wrapped in one div so a page break can never
+            # fall between a figure's title and the figure itself, or
+            # (for reasonably-sized figures) inside the figure block. Image
+            # alt text left empty -- pandoc's implicit_figures extension
+            # (disabled below, but kept empty defensively) would otherwise
+            # render non-empty alt text as a second, duplicate visible
+            # caption under the image.
+            cls = 'figblock-newpage' if suffix.endswith('_curves') else 'figblock'
+            lines.append(f'<div class="{cls}">\n\n**{caption}**\n\n![]({fn})\n\n</div>\n')
         lines.append('\\newpage\n')
     return '\n'.join(lines)
 
@@ -88,9 +114,16 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
+        report_text = REPORT_MD.read_text()
+        pooled_decode_fig = FIGDIR / 'pooled_decode_population.png'
+        if pooled_decode_fig.exists():
+            report_text = report_text.replace(
+                '<!-- POOLED_DECODE_FIGURE -->',
+                f'<div class="figblock">\n\n![]({pooled_decode_fig})\n\n</div>')
+
         combined_md = tmp / 'combined.md'
         with open(combined_md, 'w') as f:
-            f.write(REPORT_MD.read_text())
+            f.write(report_text)
             f.write('\n\n')
             f.write(build_appendix())
 
@@ -98,7 +131,7 @@ def main():
         css_path.write_text(CSS)
 
         html_path = tmp / 'combined.html'
-        subprocess.run(['pandoc', str(combined_md), '-o', str(html_path),
+        subprocess.run(['pandoc', '-f', 'markdown-implicit_figures', str(combined_md), '-o', str(html_path),
                          '--standalone', '--embed-resources',
                          '--metadata', 'title=Saccade Direction Pipeline Report — m032',
                          '-c', str(css_path)], check=True)

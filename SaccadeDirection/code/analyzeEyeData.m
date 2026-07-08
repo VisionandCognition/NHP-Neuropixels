@@ -269,16 +269,16 @@ set(ax4, 'Color', 'w');
 xlabel(ax4, 'Saccade onset (ms from go-cue)'); ylabel(ax4, '# trials');
 title(ax4, sprintf('Latency (median %.0fms)', median(es.onsetTime,'omitnan')*1000));
 
-% 5) pupil trace aligned to go-cue
+% 5) pupil trace aligned to go-cue (time axis in ms, per convention)
 ax5 = nexttile(tl);
 pm = mean(es.pupil(isCorrect,:), 1, 'omitnan');
 ps = std(es.pupil(isCorrect,:), 0, 1, 'omitnan') ./ sqrt(sum(isCorrect));
-tbEye = S.tbEye;
-plot(ax5, tbEye, pm, 'k'); hold(ax5, 'on');
-fill(ax5, [tbEye fliplr(tbEye)], [pm+ps fliplr(pm-ps)], 'k', 'FaceAlpha', 0.2, 'EdgeColor','none');
+tbEyeMs = S.tbEye * 1000;
+plot(ax5, tbEyeMs, pm, 'k'); hold(ax5, 'on');
+fill(ax5, [tbEyeMs fliplr(tbEyeMs)], [pm+ps fliplr(pm-ps)], 'k', 'FaceAlpha', 0.2, 'EdgeColor','none');
 xline(ax5, 0, 'r--');
 set(ax5, 'Color', 'w');
-xlabel(ax5, 'Time from go-cue (s)'); ylabel(ax5, 'Pupil channel (V, raw)');
+xlabel(ax5, 'Time from go-cue (ms)'); ylabel(ax5, 'Pupil channel (V, raw)');
 title(ax5, 'Pupil (raw, blink-masked)');
 
 % 6) endpoint error by direction
