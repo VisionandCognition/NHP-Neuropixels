@@ -102,17 +102,24 @@ for s = 1:numel(sessions)
         tuning(rowIdx).pPerm = pPerm;
         tuning(rowIdx).pKW = pKW;
         tuning(rowIdx).tuned = pPerm < 0.05;
+        % category distinguishes a clean single-preferred-direction
+        % response ('directional', what pPerm alone tests) from a channel
+        % with real but non-unimodal direction structure ('complex' --
+        % e.g. bimodal/opposite-direction responses, which cancel out in
+        % the vector-sum test but show up in the omnibus Kruskal-Wallis
+        % test) from no direction effect at all ('untuned'). See
+        % classifyTuning.m header for the full reasoning.
+        tuning(rowIdx).category = classifyTuning(pPerm, pKW);
     end
 
     plotSessionTuning(S, sc, tuning, dirsDeg, opts);
+    plotPopulationSummary(S, tuning, dirsDeg, opts);
 end
 
 outFile = fullfile(fileparts(opts.figDir), 'tuning_results.mat');
 save(outFile, 'tuning', 'opts');
 fprintf('saved %s (%d channel x session tuning rows, %d significantly tuned)\n', ...
     outFile, numel(tuning), sum([tuning.tuned]));
-
-plotPopulationSummary(tuning, dirsDeg, opts);
 
 end
 
@@ -128,67 +135,136 @@ function plotSessionTuning(S, sc, tuning, dirsDeg, opts)
 rows = find(strcmp({tuning.Day}, S.Day) & [tuning.RunN] == S.RunN);
 if isempty(rows), return; end
 
-tunedRows = rows([tuning(rows).tuned]);
-nShow = min(numel(tunedRows), 12);
-if nShow == 0, return; end
+% --- tuning_examples.png: ALL responsive channels (not just tuned, not
+% capped at an arbitrary count -- that was the source of "why is the
+% count different per run": it was min(nTuned,12), which just tracks
+% however many happened to be tuned that day). Sorted by depth (channel
+% index), matching the overview figure's channel ordering.
+nShow = numel(rows);
+[~, depthOrder] = sort([tuning(rows).depthIdx]);
+rowsByDepth = rows(depthOrder);
 
-f = figure('Visible','off','Position',[0 0 1400 900]);
-nCol = ceil(sqrt(nShow)); nRow = ceil(nShow/nCol);
+f = figure('Visible','off','Position',[0 0 2200 2000], 'Color', 'w');
+nCol = ceil(sqrt(nShow*1.3)); nRow = ceil(nShow/nCol);
+tl = tiledlayout(f, nRow, nCol, 'TileSpacing', 'none', 'Padding', 'compact');
+nDirectional = sum(strcmp({tuning(rows).category}, 'directional'));
+nComplex = sum(strcmp({tuning(rows).category}, 'complex'));
 for i = 1:nShow
-    r = tunedRows(i);
-    subplot(nRow, nCol, i);
-    theta = deg2rad([dirsDeg dirsDeg(1)]);
-    rho = [tuning(r).meanByDir, tuning(r).meanByDir(1)];
-    polarplot(theta, max(rho,0), '-o', 'LineWidth', 1.5);
-    title(sprintf('ch%d PD=%.0f R=%.2f p=%.3f', tuning(r).channel, ...
-        tuning(r).prefDir, tuning(r).resultantLen, tuning(r).pPerm), 'FontSize', 8);
+    r = rowsByDepth(i);
+    ax = nexttile(tl);
+    v = tuning(r).meanByDir;
+    vn = (v - min(v)) / max(range(v), eps); % per-channel min-max, just for compact display
+    [~, col] = classifyTuning(tuning(r).pPerm, tuning(r).pKW);
+    plot(ax, [dirsDeg dirsDeg(1)+360], [vn vn(1)], '-o', 'Color', col, 'MarkerFaceColor', col, ...
+        'LineWidth', 1, 'MarkerSize', 2);
+    ylim(ax, [-0.1 1.1]);
+    xticks(ax, []); yticks(ax, []);
+    if strcmp(tuning(r).category, 'untuned')
+        set(ax, 'XColor', [0.85 0.85 0.85], 'YColor', [0.85 0.85 0.85], 'LineWidth', 0.5, 'Box', 'on');
+    else
+        set(ax, 'XColor', col, 'YColor', col, 'LineWidth', 1.5, 'Box', 'on');
+    end
+    title(ax, sprintf('%d', tuning(r).channel), 'FontSize', 6, 'FontWeight', 'normal');
 end
-sgtitle(sprintf('%s run-%03d: direction-tuned channels', S.Day, S.RunN));
+title(tl, sprintf(['%s run-%03d: ALL responsive channels (n=%d) -- ' ...
+    'red = directional (n=%d), orange = complex/non-unimodal (n=%d), gray = untuned'], ...
+    S.Day, S.RunN, nShow, nDirectional, nComplex));
+forceLightTheme(f);
 saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_tuning_examples.png', S.Day, S.RunN)));
 close(f);
 
-% tuning matrix heatmap sorted by preferred direction (all tuned channels this session)
-if numel(tunedRows) >= 2
-    allRows = rows;
-    prefs = [tuning(allRows).prefDir];
+% --- tuning_matrix.png: all responsive channels, sorted by preferred
+% direction, with a *bounded* per-channel normalization (min-max to
+% [0,1]) instead of dividing by the row max -- the old version divided
+% raw (signed) baseline-subtracted responses by their own max, so a
+% weakly-modulated/noisy channel with a tiny positive max but a much
+% larger negative dip produced huge out-of-range ratios, blowing out the
+% shared color axis and washing out every other (well-behaved) row.
+% Min-max keeps every row in [0,1] regardless of sign/magnitude, so the
+% shared colorbar is never dominated by a handful of outlier channels.
+% A tuning-strength strip and a tuned/not marker are shown alongside so
+% amplitude information isn't lost in the normalization.
+if numel(rows) >= 2
+    prefs = [tuning(rows).prefDir];
     [~, order] = sort(prefs);
-    allRows = allRows(order);
+    allRows = rows(order);
     M = cat(1, tuning(allRows).meanByDir);
-    Mnorm = M ./ max(M, [], 2);
+    Mnorm = (M - min(M,[],2)) ./ max(range(M,2), eps);
+    strength = [tuning(allRows).resultantLen]';
+    [~, catColor] = classifyTuning([tuning(allRows).pPerm], [tuning(allRows).pKW]);
 
-    f2 = figure('Visible','off','Position',[0 0 800 600]);
-    imagesc(dirsDeg, 1:numel(allRows), Mnorm);
-    xlabel('Saccade direction (deg)'); ylabel('Channel (sorted by preferred direction)');
-    title(sprintf('%s run-%03d: tuning matrix (normalized)', S.Day, S.RunN));
-    colorbar;
+    f2 = figure('Visible','off','Position',[0 0 1000 700], 'Color', 'w');
+    tl2 = tiledlayout(f2, 1, 10, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+    axM = nexttile(tl2, 1, [1 6]);
+    imagesc(axM, dirsDeg, 1:numel(allRows), Mnorm);
+    set(axM, 'CLim', [0 1], 'Color', 'w');
+    xlabel(axM, 'Saccade direction (deg)'); ylabel(axM, 'Channel (sorted by preferred direction)');
+    title(axM, sprintf('%s run-%03d: tuning matrix (per-channel min-max)', S.Day, S.RunN));
+    colorbar(axM);
+
+    axS = nexttile(tl2, 7, [1 2]);
+    imagesc(axS, 1, 1:numel(allRows), strength);
+    set(axS, 'Color', 'w', 'XTick', []);
+    title(axS, 'strength', 'FontSize', 8);
+    cbS = colorbar(axS); cbS.Label.String = 'resultant length';
+
+    axT = nexttile(tl2, 9, [1 2]);
+    image(axT, 1, 1:numel(allRows), reshape(catColor, [numel(allRows) 1 3]));
+    set(axT, 'Color', 'w', 'XTick', []);
+    title(axT, {'category', '(red=dir,orange=cx)'}, 'FontSize', 7);
+
+    forceLightTheme(f2);
     saveas(f2, fullfile(opts.figDir, sprintf('%s_run-%03d_tuning_matrix.png', S.Day, S.RunN)));
     close(f2);
 end
 end
 
 % ------------------------------------------------------------------
-function plotPopulationSummary(tuning, dirsDeg, opts)
-if isempty(tuning), return; end
-tuned = [tuning.tuned];
+function plotPopulationSummary(S, tuning, dirsDeg, opts)
+% Per-SESSION summary (not pooled across sessions): each session is an
+% independent penetration, often a different burr hole/target structure
+% (see sessionAnatomyInfo.m), and the probe is not seated to the same
+% depth across sessions -- pooling channel depth index across sessions
+% (as an earlier version of this figure did) implied a false
+% cross-session comparability. Real depth (um from tip) is used here
+% instead of abstract channel index, meaningful within this one session.
+rows = find(strcmp({tuning.Day}, S.Day) & [tuning.RunN] == S.RunN);
+if isempty(rows), return; end
+tuned = [tuning(rows).tuned];
+anat = sessionAnatomyInfo(S.Day);
 
-f = figure('Visible','off','Position',[0 0 1200 500]);
+depthUm = nan(1, numel(rows));
+if isfield(S, 'CHdepthUm')
+    depthUm = S.CHdepthUm([tuning(rows).depthIdx])';
+end
 
-subplot(1,3,1);
-polarhistogram(deg2rad([tuning(tuned).prefDir]), 16);
-title(sprintf('Preferred direction (n=%d tuned channels)', sum(tuned)));
+f = figure('Visible','off','Position',[0 0 1400 500], 'Color', 'w');
+tl = tiledlayout(f, 1, 3, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-subplot(1,3,2);
-histogram([tuning.resultantLen], 20);
-xlabel('Resultant vector length (tuning strength)'); ylabel('# channels');
-title('Tuning strength, all screened channels');
+ax1 = polaraxes(tl);
+ax1.Layout.Tile = 1;
+if any(tuned)
+    polarhistogram(ax1, deg2rad([tuning(rows(tuned)).prefDir]), 16);
+end
+title(ax1, sprintf('Preferred direction (n=%d/%d tuned)', sum(tuned), numel(rows)));
 
-subplot(1,3,3);
-scatter([tuning.depthIdx], [tuning.prefDir], 15, [tuning.resultantLen], 'filled');
-c = colorbar; c.Label.String = 'tuning strength';
-xlabel('Channel depth index'); ylabel('Preferred direction (deg)');
-title('Preferred direction vs. probe depth');
+ax2 = nexttile(tl);
+histogram(ax2, [tuning(rows).resultantLen], 20);
+set(ax2, 'Color', 'w');
+xlabel(ax2, 'Resultant vector length (tuning strength)'); ylabel(ax2, '# channels');
+title(ax2, 'Tuning strength, all responsive channels');
 
-sgtitle(sprintf('Population summary across %d sessions', numel(unique({tuning.Day}))));
-saveas(f, fullfile(opts.figDir, 'population_tuning_summary.png'));
+ax3 = nexttile(tl);
+scatter(ax3, depthUm/1000, [tuning(rows).prefDir], 15, [tuning(rows).resultantLen], 'filled');
+set(ax3, 'Color', 'w');
+c = colorbar(ax3); c.Label.String = 'tuning strength';
+xlabel(ax3, 'Real electrode depth (mm from tip)'); ylabel(ax3, 'Preferred direction (deg)');
+title(ax3, 'Preferred direction vs. real depth (this session only)');
+
+title(tl, sprintf('%s run-%03d population summary -- burr hole %s (%s)', ...
+    S.Day, S.RunN, anat.burrHole, strjoin(anat.structures, ' -> ')), 'Interpreter', 'none');
+forceLightTheme(f);
+saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_population_summary.png', S.Day, S.RunN)));
 close(f);
 end

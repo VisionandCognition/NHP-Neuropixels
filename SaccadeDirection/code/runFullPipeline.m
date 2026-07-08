@@ -20,6 +20,10 @@ sessions = loadAllSessions();
 screening = screenResponsiveChannels(sessions);
 tuning = computeDirectionTuning(sessions, screening);
 eyeSummary = analyzeEyeData(sessions);
+artifactCheck = checkArtifactCorrelation(sessions);
+sharedCheck = checkSharedComponentKinematics(sessions, eyeSummary);
+planExecResults = analyzePlanningExecution(sessions, eyeSummary);
+planExecSummary = summarizePlanningExecution('saclocked'); %#ok<NASGU>
 
 fprintf('\n=== Pipeline complete ===\n');
 fprintf('%d sessions, %d channel-session rows tuned (of %d screened responsive)\n', ...

@@ -54,15 +54,53 @@ for s = 1:numel(sessions)
     pupil = rawP;
     pupil(abs(pupil) > opts.blinkThresh) = nan;
 
+    % Blink/dropout mask on the eye POSITION channels themselves (see
+    % extractSaccadeSession.m/S.eyeBlinkMask for why this exists and is
+    % separate from the pupil-only masking above): during a blink, X/Y
+    % pin near a ~-5V rail well outside any real saccade's raw excursion,
+    % producing huge spurious "saccades" to nonsense dva coordinates if
+    % left in. filtfilt cannot tolerate NaNs (a single NaN corrupts the
+    % ENTIRE zero-phase-filtered trial, not just nearby samples), so blink
+    % samples are linearly interpolated before filtering, then re-masked
+    % to NaN afterward everywhere they're used for onset search, plotting,
+    % and kinematics -- i.e. filtering sees a continuous signal, but nothing
+    % downstream ever treats an interpolated/blink sample as real gaze.
+    if isfield(S, 'eyeBlinkMask')
+        blinkMask = S.eyeBlinkMask;
+    else
+        blinkMask = false(nTrials, nSamp); % older extractions without this field: no masking possible
+    end
+    dvaXi = dvaX; dvaYi = dvaY;
+    for t = 1:nTrials
+        if any(blinkMask(t,:))
+            dvaXi(t,:) = fillmissing(dvaX(t,:), 'linear', 'EndValues', 'nearest', 'SamplePoints', find(true(1,nSamp)), ...
+                'MissingLocations', blinkMask(t,:));
+            dvaYi(t,:) = fillmissing(dvaY(t,:), 'linear', 'EndValues', 'nearest', 'SamplePoints', find(true(1,nSamp)), ...
+                'MissingLocations', blinkMask(t,:));
+        end
+    end
+
     % raw analog eye channels are noise-dominated sample-to-sample (30kHz
     % ADC noise gives spurious velocities of 1e5-1e6 dva/s if
     % differentiated directly) -- low-pass filter before computing
     % velocity, as is standard for saccade onset/offset detection.
     [b_eye, a_eye] = butter(2, 50/(Fs/2), 'low');
-    dvaXs = filtfilt(b_eye, a_eye, dvaX')';
-    dvaYs = filtfilt(b_eye, a_eye, dvaY')';
+    dvaXs = filtfilt(b_eye, a_eye, dvaXi')';
+    dvaYs = filtfilt(b_eye, a_eye, dvaYi')';
 
-    vel = hypot(diff(dvaXs,1,2), diff(dvaYs,1,2)) * Fs; % dva/s, nTrial x (nSamp-1)
+    % Re-mask blink samples (plus 10ms padding either side, to cover the
+    % filter's transient response at the edge of a blink) to NaN in the
+    % position traces actually used from here on -- nothing downstream
+    % should see interpolated values as if they were real gaze.
+    padSamp = round(0.010*Fs);
+    blinkMaskPad = blinkMask;
+    if padSamp > 0
+        blinkMaskPad = conv2(double(blinkMask), ones(1,2*padSamp+1), 'same') > 0;
+    end
+    dvaXs(blinkMaskPad) = nan;
+    dvaYs(blinkMaskPad) = nan;
+
+    vel = hypot(diff(dvaXs,1,2), diff(dvaYs,1,2)) * Fs; % dva/s, nTrial x (nSamp-1); NaN where either endpoint is blink-masked
     tbVel = S.tbEye(1:end-1) + diff(S.tbEye)/2;
 
     searchIdx = tbVel >= opts.searchWin(1) & tbVel < opts.searchWin(2);
@@ -78,7 +116,7 @@ for s = 1:numel(sessions)
 
     for t = 1:nTrials
         v = vel(t,:);
-        fixSD(t) = mean(std([dvaXs(t,baseIdx); dvaYs(t,baseIdx)], 0, 2), 'omitnan');
+        fixSD(t) = mean(std([dvaXs(t,baseIdx); dvaYs(t,baseIdx)], 0, 2, 'omitnan'), 'omitnan');
 
         vs = v; vs(~searchIdx) = -inf;
         aboveThresh = vs > opts.velThresh;
@@ -147,66 +185,114 @@ end
 function plotEyeSummary(S, es, dirsDeg, opts)
 isCorrect = strcmp(S.trialTable.outcome, 'correct');
 dirDeg = S.trialTable.direction_deg;
-cmap = hsv(8);
+% hsv(8) puts a pale yellow-green (RGB 0.5,1,0) at the 90 deg slot, which
+% at the 0.2-0.35 trajectory-line alpha used below nearly disappears
+% against the white background -- looked like "fewer trials" for that
+% direction but was a color-visibility artifact, not a real count
+% difference (verified directly against trialTable counts). Fixed
+% palette instead: 8 hues at consistent, moderate saturation/luminance so
+% every direction stays visible at low alpha on white.
+cmap = [0.89 0.10 0.11; 1.00 0.50 0.00; 0.60 0.60 0.00; 0.20 0.60 0.20; ...
+        0.00 0.60 0.60; 0.12 0.47 0.71; 0.58 0.00 0.83; 0.89 0.10 0.55];
+pctCorrect = 100*sum(isCorrect)/numel(isCorrect);
 
-f = figure('Visible','off','Position',[0 0 1500 900]);
+f = figure('Visible','off','Position',[0 0 1900 950], 'Color', 'w');
+tl = tiledlayout(f, 2, 4, 'TileSpacing', 'compact', 'Padding', 'compact');
 
-% 1) trajectory spoke plot
-subplot(2,3,1); hold on;
+% Dotted circle of radius Stm.TargWinSz around each target: the task's
+% own online hit-detection window (any landing inside this circle counts
+% as "correct"). Makes it visually obvious that a saccade landing several
+% dva short of dead-center is still a legitimate hit, not a labeling
+% error (see PIPELINE_REPORT sec 4.4).
+targXY = cat(1, S.Stm.Targ.xy_dva);
+targWinSz = S.Stm.TargWinSz;
+circTheta = linspace(0, 2*pi, 60);
+circX = targWinSz*cos(circTheta); circY = targWinSz*sin(circTheta);
+
+% 1) trajectory spoke plot -- ALL trials (error trials included, dimmer)
+% Hit-detection circles are drawn FIRST (light grey, behind everything)
+% so they read as unobtrusive background context, not a foreground element.
+ax1 = nexttile(tl); hold(ax1, 'on');
+for i = 1:size(targXY,1)
+    plot(ax1, targXY(i,1)+circX, targXY(i,2)+circY, ':', 'Color', [0.75 0.75 0.75], 'LineWidth', 1);
+end
+for d = 1:8
+    trl = find(dirDeg==dirsDeg(d));
+    for k = trl'
+        w = 0.35 * isCorrect(k) + 0.08 * ~isCorrect(k);
+        plot(ax1, es.dvaX(k,:), es.dvaY(k,:), 'Color', [cmap(d,:) w]);
+    end
+end
+scatter(ax1, targXY(:,1), targXY(:,2), 80, 'k', 'filled');
+axis(ax1, 'equal'); xlim(ax1, [-16 16]); ylim(ax1, [-16 16]);
+set(ax1, 'Color', 'w');
+xlabel(ax1, 'X (dva)'); ylabel(ax1, 'Y (dva)');
+title(ax1, sprintf('%s run-%03d: all trials (n=%d)', S.Day, S.RunN, numel(isCorrect)));
+
+% 1b) trajectory spoke plot -- correct trials only, with %correct
+ax1b = nexttile(tl); hold(ax1b, 'on');
+for i = 1:size(targXY,1)
+    plot(ax1b, targXY(i,1)+circX, targXY(i,2)+circY, ':', 'Color', [0.75 0.75 0.75], 'LineWidth', 1);
+end
 for d = 1:8
     trl = find(isCorrect & dirDeg==dirsDeg(d));
     for k = trl'
-        plot(es.dvaX(k,:), es.dvaY(k,:), 'Color', [cmap(d,:) 0.2]);
+        plot(ax1b, es.dvaX(k,:), es.dvaY(k,:), 'Color', [cmap(d,:) 0.35]);
     end
 end
-targXY = cat(1, S.Stm.Targ.xy_dva);
-scatter(targXY(:,1), targXY(:,2), 80, 'k', 'filled');
-axis equal; xlim([-16 16]); ylim([-16 16]);
-xlabel('X (dva)'); ylabel('Y (dva)');
-title(sprintf('%s run-%03d: eye trajectories', S.Day, S.RunN));
+scatter(ax1b, targXY(:,1), targXY(:,2), 80, 'k', 'filled');
+axis(ax1b, 'equal'); xlim(ax1b, [-16 16]); ylim(ax1b, [-16 16]);
+set(ax1b, 'Color', 'w');
+xlabel(ax1b, 'X (dva)'); ylabel(ax1b, 'Y (dva)');
+title(ax1b, sprintf('Correct trials only (%.0f%% correct, n=%d); dotted circle = hit window (TargWinSz=%.0fdva)', pctCorrect, sum(isCorrect), targWinSz));
 
 % 2) fixation scatter (baseline window)
-subplot(2,3,2);
+ax2 = nexttile(tl);
 baseIdx = S.tbEye >= -0.9 & S.tbEye < -0.6;
 bx = mean(es.dvaX(:,baseIdx),2,'omitnan'); by = mean(es.dvaY(:,baseIdx),2,'omitnan');
-scatter(bx, by, 10, 'filled'); axis equal;
-xlim([-4 4]); ylim([-4 4]);
-xlabel('X (dva)'); ylabel('Y (dva)');
-title(sprintf('Fixation scatter (median SD=%.2f dva)', median(es.fixSD,'omitnan')));
+scatter(ax2, bx, by, 10, 'filled'); axis(ax2, 'equal');
+xlim(ax2, [-4 4]); ylim(ax2, [-4 4]); set(ax2, 'Color', 'w');
+xlabel(ax2, 'X (dva)'); ylabel(ax2, 'Y (dva)');
+title(ax2, sprintf('Fixation scatter (median SD=%.2f dva)', median(es.fixSD,'omitnan')));
 
 % 3) main sequence
-subplot(2,3,3);
-scatter(es.amplitude, es.peakVel, 15, 'filled');
-xlabel('Amplitude (dva)'); ylabel('Peak velocity (dva/s)');
-title('Saccade main sequence');
+ax3 = nexttile(tl);
+scatter(ax3, es.amplitude, es.peakVel, 15, 'filled');
+set(ax3, 'Color', 'w');
+xlabel(ax3, 'Amplitude (dva)'); ylabel(ax3, 'Peak velocity (dva/s)');
+title(ax3, 'Saccade main sequence');
 
-% 4) latency histogram
-subplot(2,3,4);
-histogram(es.onsetTime, 30);
-xlabel('Saccade onset (s from go-cue)'); ylabel('# trials');
-title(sprintf('Latency (median %.3fs)', median(es.onsetTime,'omitnan')));
+% 4) latency histogram (ms)
+ax4 = nexttile(tl);
+histogram(ax4, es.onsetTime*1000, 30);
+set(ax4, 'Color', 'w');
+xlabel(ax4, 'Saccade onset (ms from go-cue)'); ylabel(ax4, '# trials');
+title(ax4, sprintf('Latency (median %.0fms)', median(es.onsetTime,'omitnan')*1000));
 
 % 5) pupil trace aligned to go-cue
-subplot(2,3,5);
+ax5 = nexttile(tl);
 pm = mean(es.pupil(isCorrect,:), 1, 'omitnan');
 ps = std(es.pupil(isCorrect,:), 0, 1, 'omitnan') ./ sqrt(sum(isCorrect));
 tbEye = S.tbEye;
-plot(tbEye, pm, 'k'); hold on;
-fill([tbEye fliplr(tbEye)], [pm+ps fliplr(pm-ps)], 'k', 'FaceAlpha', 0.2, 'EdgeColor','none');
-xline(0,'r--');
-xlabel('Time from go-cue (s)'); ylabel('Pupil channel (V, raw)');
-title('Pupil (raw, blink-masked)');
+plot(ax5, tbEye, pm, 'k'); hold(ax5, 'on');
+fill(ax5, [tbEye fliplr(tbEye)], [pm+ps fliplr(pm-ps)], 'k', 'FaceAlpha', 0.2, 'EdgeColor','none');
+xline(ax5, 0, 'r--');
+set(ax5, 'Color', 'w');
+xlabel(ax5, 'Time from go-cue (s)'); ylabel(ax5, 'Pupil channel (V, raw)');
+title(ax5, 'Pupil (raw, blink-masked)');
 
 % 6) endpoint error by direction
-subplot(2,3,6);
+ax6 = nexttile(tl);
 errByDir = nan(1,8);
 for d = 1:8
     errByDir(d) = mean(es.endpointErr(isCorrect & dirDeg==dirsDeg(d)), 'omitnan');
 end
-bar(dirsDeg, errByDir);
-xlabel('Direction (deg)'); ylabel('Endpoint error (dva)');
-title('Saccade accuracy by direction');
+bar(ax6, dirsDeg, errByDir);
+set(ax6, 'Color', 'w');
+xlabel(ax6, 'Direction (deg)'); ylabel(ax6, 'Endpoint error (dva)');
+title(ax6, 'Saccade accuracy by direction');
 
+forceLightTheme(f);
 saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_eye_summary.png', S.Day, S.RunN)));
 close(f);
 end

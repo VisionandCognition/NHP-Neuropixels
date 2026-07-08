@@ -1,0 +1,79 @@
+function info = sessionAnatomyInfo(day)
+% SESSIONANATOMYINFO Burr hole, online channel-selection scheme, and
+% planned trajectory (target structures, superficial to deep) for a given
+% m032 recording day.
+%
+% info = sessionAnatomyInfo(day)
+%   day : 'YYYYMMDD' string
+%
+% Returns a struct with fields: burrHole (string, may end '?' if the
+% source log itself was uncertain), channelSelection (string, the online
+% electrode-bank/section selection used that day), plannedDepthMm
+% (approximate planned total insertion depth for that burr hole, from
+% Chamber2Holes.docx), structures (cell array, superficial to deep).
+%
+% SOURCE AND LIMITATIONS (read before using this for anything beyond a
+% qualitative "roughly what region" annotation):
+%   - Day -> burr hole and channel-selection strings are transcribed
+%     directly from Kwibus_elab.pdf (the lab notebook), one entry per
+%     recording day. 20260224 is marked with '?' in the source log itself
+%     (burr hole 5 assumed but not certain) -- reflected here.
+%   - structures/plannedDepthMm are the PLANNED trajectory per burr hole
+%     from Chamber2Holes.docx, i.e. what the MRI-based planning predicted
+%     that hole should pass through at full planned depth -- not a
+%     verified, session-specific, per-channel anatomical registration.
+%   - There is NOT enough clean, consistently-recorded numeric data in
+%     Kwibus_elab.pdf to convert this into an absolute "mm below cortical
+%     surface" per channel for most sessions: the log has fields for
+%     "guide tube final depth", "probe tip enter guide tube depth", and
+%     "signal onset depth" (the latter being the actual dura/brain-surface
+%     crossing reference needed for this), but "signal onset depth" is
+%     blank/unfilled for most of these 12 days, and only 2 of 12
+%     (20260324, 20260325) have an explicit final recording depth encoded
+%     in the channel-selection string itself (e.g. "Ch2H2@53mm"). Treat
+%     this function's output as "which structures this burr hole's
+%     trajectory generally passes through," not as a per-channel lookup.
+
+persistent T
+if isempty(T)
+    % day -> {burrHole, channelSelection}, from Kwibus_elab.pdf
+    T = containers.Map();
+    T('20260224') = struct('burrHole', '5?', 'channelSelection', 'Ch2H5quarter');
+    T('20260226') = struct('burrHole', '4',  'channelSelection', 'Ch2H4quarter');
+    T('20260303') = struct('burrHole', '5',  'channelSelection', 'Ch2h5quarterD');
+    T('20260310') = struct('burrHole', '5',  'channelSelection', '4bankeven');
+    T('20260312') = struct('burrHole', '1',  'channelSelection', 'Single column');
+    T('20260317') = struct('burrHole', '2',  'channelSelection', 'Ch2H2sections3quarterD');
+    T('20260318') = struct('burrHole', '0',  'channelSelection', 'Ch2H0sections2');
+    T('20260320') = struct('burrHole', '4',  'channelSelection', 'Ch2H4quarterD');
+    T('20260323') = struct('burrHole', '5',  'channelSelection', 'Single column');
+    T('20260324') = struct('burrHole', '2',  'channelSelection', 'Ch2H2@53mm');
+    T('20260325') = struct('burrHole', '1',  'channelSelection', 'Ch2H1@53');
+    T('20260326') = struct('burrHole', '2',  'channelSelection', '4bankeven');
+end
+
+% burr hole -> planned trajectory, from Chamber2Holes.docx (superficial to deep)
+holeInfo = containers.Map();
+holeInfo('0') = struct('plannedDepthMm', 27, 'structures', {{'S1 BA1/2, BA3', 'VLP, VPI, ZI'}});
+holeInfo('1') = struct('plannedDepthMm', 28, 'structures', {{'S1 BA1/2, PCC BA23', 'SC'}});
+holeInfo('2') = struct('plannedDepthMm', 27, 'structures', {{'S1 BA1/2 or PE BA5', 'VIP', 'Inferior/Anterior pulvinar (Medial pulvinar, Suprageniculate, MGN)'}});
+holeInfo('4') = struct('plannedDepthMm', 25, 'structures', {{'S1 BA1/2, BA3, (M1), PCC BA23', 'Thalamus MD, CL, CM'}});
+holeInfo('5') = struct('plannedDepthMm', 25, 'structures', {{'S1 BA1/2, BA3, PCC BA23, retrosplenial BA29', 'Habenula, Posterior commissure or CM'}});
+
+if ~isKey(T, day)
+    info = struct('burrHole', '?', 'channelSelection', 'unknown', ...
+        'plannedDepthMm', nan, 'structures', {{}});
+    return
+end
+
+entry = T(day);
+holeKey = regexprep(entry.burrHole, '\?', ''); % strip uncertainty marker for the lookup
+hi = holeInfo(holeKey);
+
+info = struct();
+info.burrHole = entry.burrHole;
+info.channelSelection = entry.channelSelection;
+info.plannedDepthMm = hi.plannedDepthMm;
+info.structures = hi.structures;
+
+end

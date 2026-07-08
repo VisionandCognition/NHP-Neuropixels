@@ -84,7 +84,7 @@ for s = 1:numel(sessions)
 
     fprintf('%s run-%03d: %d/%d channels responsive\n', S.Day, S.RunN, sum(responsive), nChan);
 
-    plotSessionOverview(S, responsive, opts, winNames, baseWin);
+    plotSessionOverview(S, screening(s), opts, winNames, baseWin);
 end
 
 outFile = fullfile(fileparts(opts.figDir), 'screening_results.mat');
@@ -119,8 +119,14 @@ q(ok) = qtmp;
 end
 
 % ------------------------------------------------------------------
-function plotSessionOverview(S, responsive, opts, winNames, baseWin)
+function plotSessionOverview(S, sc, opts, winNames, baseWin)
+% sc: this session's row of the `screening` struct array (p, fdrP,
+% effect, responsive, windowNames), so the epoch-specificity panel can
+% show *which* window each channel was significant in, not just a binary
+% responsive flag.
+responsive = sc.responsive;
 isCorrect = strcmp(S.trialTable.outcome, 'correct');
+nChan = size(S.MUA, 1);
 meanMUA = squeeze(mean(S.MUA(:, isCorrect, :), 2)); % nChan x nTime
 baseIdx = S.tb >= baseWin(1) & S.tb < baseWin(2);
 base = mean(meanMUA(:, baseIdx), 2);
@@ -132,39 +138,135 @@ baseTrials = squeeze(mean(S.MUA(:, isCorrect, baseIdx), 3));
 baseSD = std(baseTrials, 0, 2);
 meanMUAz = (meanMUA - base) ./ max(baseSD, eps);
 
-f = figure('Visible', 'off', 'Position', [0 0 1400 600]);
+% Channel index 1 = deepest (nearest probe tip, smallest CHdepthUm);
+% channel index nChan = shallowest (nearest brain surface / probe base).
+% Plot with deep at the BOTTOM (YDir normal + smallest-index-first data),
+% matching anatomical convention (surface up, tip down).
+chIdx = (1:nChan)';
 
-subplot(1,3,1);
-imagesc(S.tb, 1:size(meanMUAz,1), meanMUAz);
-set(gca, 'CLim', [-3 3]);
-colormap(gca, parula);
-colorbar;
-xlabel('Time from go-cue (s)'); ylabel('Channel (depth order)');
-title(sprintf('%s run-%03d: mean MUA, z-scored to baseline (correct trials)', S.Day, S.RunN));
-hold on;
-xline(0, 'w--', 'go-cue');
-for w = 1:numel(winNames)
-    win = opts.windows.(winNames{w});
-    xline(win(1), 'w:'); xline(win(2), 'w:');
+% Trial-epoch event times relative to targ_start (go-cue, t=0), from this
+% session's own Stm timing (fixed across trials by task design).
+tFix   = -(S.Stm.FIXT + S.Stm.STIMT + S.Stm.DELAYT)/1000;
+tStim  = -(S.Stm.STIMT + S.Stm.DELAYT)/1000;
+tDelay = -(S.Stm.DELAYT)/1000;
+tGo    = 0;
+tEnd   = S.Stm.TARGT/1000;
+evT = [tFix, tStim, tDelay, tGo, tEnd];
+evLabel = {'fixation', 'stimulus', 'delay', 'go-cue', 'target end'};
+% NB: pick colors that stay visible against BOTH the white figure
+% background/legend AND the parula heatmap underneath (parula spans dark
+% blue -> teal -> green -> yellow) -- white/pale colors disappear against
+% white, and blues/teals/greens disappear against parula's own midtones
+% (this is why the original cyan "delay" line was hard to see). Stick to
+% colors outside parula's gamut: orange, magenta, purple, black, dark red.
+evColor = {[0.9 0.45 0], [1 0 1], [0.55 0 0.85], [0 0 0], [0.65 0.1 0.1]};
+
+anat = sessionAnatomyInfo(S.Day);
+
+f = figure('Visible', 'off', 'Position', [0 0 1700 700], 'Color', 'w');
+tl = tiledlayout(f, 1, 12, 'TileSpacing', 'compact', 'Padding', 'compact');
+
+% --- Panel 1 (narrow): real electrode depth ruler, aligned to the same
+% channel-index y-axis as the heatmap, so gaps/clusters from the online
+% channel-selection scheme (bank/section/quarter-density picks) are
+% visible directly next to the response data.
+axDepth = nexttile(tl, 1, [1 2]);
+if isfield(S, 'CHdepthUm')
+    plot(axDepth, S.CHdepthUm/1000, chIdx, 'k.-', 'MarkerSize', 8);
+    xlabel(axDepth, 'Electrode depth (mm from tip)');
+else
+    text(axDepth, 0.5, 0.5, 'CHdepthUm not available', 'HorizontalAlignment', 'center');
 end
+ylim(axDepth, [1 nChan]);
+set(axDepth, 'YDir', 'normal', 'Color', 'w');
+ylabel(axDepth, 'Channel # (1 = deepest / probe tip)');
+title(axDepth, 'Real depth');
+grid(axDepth, 'on');
 
-subplot(1,3,2);
-if any(responsive)
-    imagesc(S.tb, 1:sum(responsive), meanMUAz(responsive,:));
-    set(gca, 'CLim', [-3 3]);
-    colorbar;
+% --- Panel 2 (wide): full-probe z-scored MUA heatmap
+axMain = nexttile(tl, 3, [1 5]);
+imagesc(axMain, S.tb, chIdx, meanMUAz);
+set(axMain, 'CLim', [-3 3], 'YDir', 'normal', 'Color', 'w');
+colormap(axMain, parula);
+cb = colorbar(axMain); cb.Label.String = 'z (baseline SD)';
+xlabel(axMain, 'Time from go-cue (s)');
+ylabel(axMain, 'Channel # (1 = deepest / probe tip)');
+title(axMain, sprintf('%s run-%03d: mean MUA, z-scored to baseline (correct trials, deep=bottom)', S.Day, S.RunN));
+ylim(axMain, [1 nChan]);
+hold(axMain, 'on');
+evHandles = gobjects(1, numel(evT));
+for e = 1:numel(evT)
+    xline(axMain, evT(e), '-', 'Color', evColor{e}, 'LineWidth', 2.5);
+    evHandles(e) = plot(axMain, nan, nan, '-', 'Color', evColor{e}, 'LineWidth', 2.5); % legend proxy
 end
-xlabel('Time from go-cue (s)'); ylabel('Responsive channel #');
-title(sprintf('%d/%d responsive channels', sum(responsive), numel(responsive)));
-xline(0, 'w--');
+legend(axMain, evHandles, evLabel, 'Location', 'northoutside', 'Orientation', 'horizontal', ...
+    'Box', 'off', 'TextColor', 'k', 'FontSize', 8);
 
-subplot(1,3,3);
-barh(1:numel(responsive), double(responsive));
-set(gca, 'YDir', 'reverse');
-ylabel('Channel (depth order)'); xlabel('responsive');
-title('Responsive channel map');
-ylim([1 numel(responsive)]);
+% --- Panel 3 (medium): which task epoch each channel is significant in
+% (sign + magnitude of the effect, gray/transparent where not
+% significant), using the same channel-index y-axis as panel 2.
+axEpoch = nexttile(tl, 8, [1 3]);
+sigMask = sc.fdrP < opts.alpha & abs(sc.effect) > opts.minEffect;
+epochEffect = sc.effect;
+epochEffect(isnan(epochEffect)) = 0;
+imagesc(axEpoch, 1:numel(winNames), chIdx, epochEffect, 'AlphaData', double(sigMask));
+set(axEpoch, 'CLim', [-2 2], 'YDir', 'normal', 'Color', [0.85 0.85 0.85]);
+colormap(axEpoch, redblue(256));
+set(axEpoch, 'XTick', 1:numel(winNames), 'XTickLabel', winNames, 'XTickLabelRotation', 30);
+cb2 = colorbar(axEpoch); cb2.Label.String = 'effect (baseline SD)';
+ylim(axEpoch, [1 nChan]);
+title(axEpoch, 'Significant epoch(s) per channel');
+ylabel(axEpoch, '');
 
+% --- Panel 4 (narrow): text annotation, planned trajectory / channel
+% selection for this day (qualitative -- see sessionAnatomyInfo.m header
+% for why this is not a precise per-channel depth registration).
+axText = nexttile(tl, 11, [1 2]);
+axis(axText, 'off');
+wrapWidth = 32; % chars -- this panel is narrow, long structure names must be wrapped or they clip past the tile edge invisibly
+structLines = cellfun(@(s) strjoin(wrapText(s, wrapWidth), '\n'), anat.structures, 'UniformOutput', false);
+structStr = strjoin(structLines, ' ->\n');
+txt = sprintf(['Burr hole: %s\nPlanned depth: %.0f mm\nChannel selection:\n%s\n\n' ...
+    'Planned trajectory\n(superficial -> deep):\n%s\n\n' ...
+    '%d/%d channels responsive\n(qualitative only -- no verified\nper-channel depth registration,\nsee sessionAnatomyInfo.m)'], ...
+    anat.burrHole, anat.plannedDepthMm, strjoin(wrapText(anat.channelSelection, wrapWidth), '\n'), ...
+    structStr, sum(responsive), nChan);
+text(axText, 0, 1, txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
+    'FontSize', 8, 'Interpreter', 'none', 'Color', 'k');
+
+forceLightTheme(f);
 saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_overview.png', S.Day, S.RunN)));
 close(f);
+end
+
+% ------------------------------------------------------------------
+function cmap = redblue(n)
+% Simple blue-white-red diverging colormap (no extra toolbox dependency).
+half = floor(n/2);
+top = [linspace(0.1,1,half)', linspace(0.1,1,half)', ones(half,1)];
+bot = [ones(n-half,1), linspace(1,0.1,n-half)', linspace(1,0.1,n-half)'];
+cmap = [top; bot];
+end
+
+% ------------------------------------------------------------------
+function lines = wrapText(str, width)
+% Greedy word-wrap to a fixed character width (no font-metrics
+% dependency -- good enough for a fixed-size QC text panel).
+words = strsplit(str, ' ');
+lines = {};
+cur = '';
+for i = 1:numel(words)
+    if isempty(cur)
+        trial = words{i};
+    else
+        trial = [cur ' ' words{i}];
+    end
+    if numel(trial) > width && ~isempty(cur)
+        lines{end+1} = cur; %#ok<AGROW>
+        cur = words{i};
+    else
+        cur = trial;
+    end
+end
+if ~isempty(cur), lines{end+1} = cur; end
 end

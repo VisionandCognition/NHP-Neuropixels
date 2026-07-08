@@ -203,6 +203,7 @@ for c = 1:numel(sigChain)
             end
             yp = sortrows(yp, 2);
             CHorder = yp(:,1); % 0-based channel numbers, ordered by depth
+            CHdepthUm = yp(:,2); % electrode Y position (um from probe tip), same order as CHorder
             break
         end
     end
@@ -316,19 +317,55 @@ trialTable = table((1:nTrials)', logTrialn(:), targIdx, distIdx, directionDeg, .
     'VariableNames', {'trialIdx','trialn','targ_idx','dist_idx','direction_deg', ...
     'outcome','targStartTime','trialStartRelTime'});
 
+%% Blink/dropout mask for the eye channels (see calibrateEyeSession header
+% for why this is needed): during a blink, the pupil channel is known to
+% pin near the ADC rail (S.eyeChannelAssumption note above), but the
+% raw X/Y position channels ALSO corrupt during the same event, pinning
+% near a FIXED ~-5.00V hardware rail -- confirmed empirically identical
+% (within noise) across all 12 sessions checked, regardless of each
+% session's own raw baseline offset (which itself ranges from about -2.3V
+% to +0.8V across sessions -- this rig has no fixed zero point).
+%
+% IMPORTANT: an earlier version of this mask used an ABSOLUTE threshold
+% (|raw|>3V), reasoning that real saccades stay within ~1.5V of baseline.
+% That reasoning about the excursion SIZE was fine, but applying it as an
+% absolute cutoff was not: in sessions where the raw baseline itself sits
+% close to +-3V (e.g. 20260224, baseline Y around -2.3V), a genuine
+% target-directed saccade only needs to cross ~0.7V further to trip an
+% absolute |raw|>3V test, causing real saccades (confirmed directly: a
+% clean, physiological rise from baseline to the target, no blink-like
+% plateau, pupil channel unchanged at the same moment) to be misidentified
+% as blinks and masked out -- collapsing measured amplitude for whichever
+% directions happened to push that session's baseline past the threshold
+% (here, upward/upper-diagonal targets, since this session's Y baseline
+% was already negative). Detecting proximity to the known, fixed rail
+% value instead of a generic magnitude avoids this entirely, since the
+% rail sits at the same voltage no matter what the session's baseline is.
+railV = -5.00;
+railTol = 0.5; % generous tolerance around the rail; real data in every session checked stays well outside [-5.5,-4.5]
+eyeBlinkMask = squeeze(abs(eyeRaw(1,:,:) - railV) < railTol | abs(eyeRaw(2,:,:) - railV) < railTol); % nTrial x nSamp
+
 %% Eye calibration (session-specific, data-driven -- see subfunction)
-eyeCalib = calibrateEyeSession(eyeRaw, tbEye, trialTable, targXY);
+eyeCalib = calibrateEyeSession(eyeRaw, tbEye, trialTable, targXY, eyeBlinkMask);
 
 %% Package output
 S = struct();
 S.Day = runInfo.Day;
 S.RunN = runInfo.RunN;
 S.RunPath = runInfo.RunPath;
+% NB: runInfo.LogFile (below) is the verified behavioral log for this run
+% (matched via findSaccadeRuns by RunPath). Do NOT use S.Par.LogFn /
+% S.Par.LogPath for this -- those come from inside the log file's own
+% saved Par struct and were found to be stale, reflecting a different
+% (earlier, different-task) run in the same stim-program session, not
+% the log this data was actually extracted from.
+S.LogFile = runInfo.LogFile;
 S.ExpN = rec.ExpN;
 S.RecN = rec.RecN;
 S.apFs = apFs;
 S.niFs = niFs;
 S.CHorder = CHorder;
+S.CHdepthUm = CHdepthUm; % electrode Y position (um from probe tip), row-aligned with S.MUA / S.CHorder (row 1 = deepest/nearest tip)
 S.MUA = MUA;
 S.tb = tbds; % time (s) relative to targ_start (go-cue)
 S.trialTable = trialTable;
@@ -337,6 +374,7 @@ S.eyeChans = opts.eyeChans;
 S.eyeChannelAssumption = 'AI0=EyeX, AI1=EyeY, AI2=Pupil -- inferred from raw trace shape, not documented on rig; verify before trusting absolute values';
 S.tbEye = tbEye;
 S.eyeCalib = eyeCalib;
+S.eyeBlinkMask = eyeBlinkMask; % nTrial x nSamp logical, true = blink/dropout on the eye X/Y channels (see comment above); analyzeEyeData.m NaNs these samples before any downstream use
 S.Stm = Stm;
 S.Par = Par;
 S.lineMap = lineMap;
@@ -358,7 +396,7 @@ end
 end
 
 % ------------------------------------------------------------------
-function calib = calibrateEyeSession(eyeRaw, tbEye, trialTable, targXY)
+function calib = calibrateEyeSession(eyeRaw, tbEye, trialTable, targXY, eyeBlinkMask)
 % Fit raw-voltage -> degrees-of-visual-angle calibration per session using
 % correct trials' post-saccade landing voltage vs. the known target
 % location for that trial (no independent calibration data exists in the
@@ -371,6 +409,14 @@ function calib = calibrateEyeSession(eyeRaw, tbEye, trialTable, targXY)
 % because the raw AI0/AI1 channels show substantial cross-talk between
 % axes (a pure-Y target displaces the "X" channel and vice versa) --
 % consistent with a rotated/skewed analog eye-tracker camera axis.
+%
+% Blink/dropout samples (eyeBlinkMask, see caller) are excluded from the
+% landing-window mean. Without this, a trial whose landing window happens
+% to overlap a blink (common -- ~1/3 of trials in some sessions) averages
+% in several ~-5V rail samples alongside genuine gaze samples, which can
+% shift that trial's fitted "landing position" by many dva and, because
+% these bad trials are part of the fit itself, distort the affine
+% calibration for the WHOLE session, not just the contaminated trials.
 
 landWin = tbEye > 0.20 & tbEye < 0.35; % post go-cue landing window
 % NB: this task's saccade dwell is brief -- gaze reaches the target by
@@ -385,8 +431,11 @@ tgtX = nan(numel(trls),1);
 tgtY = nan(numel(trls),1);
 for k = 1:numel(trls)
     t = trls(k);
-    landX(k) = mean(squeeze(eyeRaw(1,t,landWin)), 'omitnan');
-    landY(k) = mean(squeeze(eyeRaw(2,t,landWin)), 'omitnan');
+    blink = eyeBlinkMask(t, landWin);
+    x = squeeze(eyeRaw(1,t,landWin)); x(blink) = nan;
+    y = squeeze(eyeRaw(2,t,landWin)); y(blink) = nan;
+    landX(k) = mean(x, 'omitnan');
+    landY(k) = mean(y, 'omitnan');
     tgtX(k) = targXY(trialTable.targ_idx(t),1);
     tgtY(k) = targXY(trialTable.targ_idx(t),2);
 end
