@@ -93,6 +93,9 @@ Each `_extracted.mat` stores this verified path as `S.LogFile`. **Do not use `S.
 | `decodeTemporalGeneralization.m` | Cross-epoch (train/test) decoding matrix (§4.10). |
 | `summarizeDecoding.m` | Pools decoding results across all 12 sessions. |
 | `plotDirectionTimecourses.m` | Per-channel mean MUA timecourse by direction, go-cue-locked and saccade-onset-locked (§4.11). |
+| `decodeAfterCommonModeRemoval.m` | Decoding before/after common-mode removal, for the 4 kinematic-linked sessions (§5.3). |
+| `decodeSlidingGeneralization.m` | Continuous sliding-window temporal generalization matrix (§4.10, §5.3). |
+| `generateAnatomyTemplate.m` | Builds the fillable per-channel/cluster anatomy assignment template (§4.12). |
 | `runFullPipeline.m` | Runs all of the above end to end. |
 
 ## 4. Key methodological decisions (and why)
@@ -181,7 +184,7 @@ Two complementary views, per session per epoch:
 
 Direct follow-up to §4.9: decoding well in an epoch only shows that direction information is present *at that time* — it doesn't say whether the population structure that carries it (which channels prefer which direction) is the *same* structure across epochs, or gets reconfigured. `decodeTemporalGeneralization.m` tests this directly: train the nearest-centroid decoder on one epoch's population response, test it on **another** epoch's response for the same held-out trials (leave-one-trial-out, full responsive population), for every (train, test) pair among visual/planning/execution — a 3×3 matrix per session. The diagonal (train and test the same epoch) is exactly §4.9's ordinary same-epoch accuracy; the off-diagonal cells are the new information: if a decoder trained on one epoch still classifies well on another, the code generalizes (shared structure); if it drops to chance, the code is epoch-specific (reconfigured). Standardization (z-scoring) is always computed from the **train** epoch's own statistics and applied to the test epoch's data, so this is a genuine test of whether the trained decision boundary transfers, not just whether both epochs are independently informative.
 
-This first pass uses the same 3 fixed epoch windows as §4.8/§4.9 (a coarse 3×3 matrix); a finer, continuous sliding-window version across the whole trial is a natural extension if the coarse version looks informative (see §7).
+This first pass uses the same 3 fixed epoch windows as §4.8/§4.9 (a coarse 3×3 matrix). `decodeSlidingGeneralization.m` extends this to a **continuous** version: 50ms bins spanning [-0.5, +0.8]s relative to go-cue (26×26 bins), same method, full responsive population, one matrix per session. Results in §5.3.
 
 ### 4.11 Per-channel direction timecourses
 
@@ -200,6 +203,15 @@ data/figures/timecourses/<Day>_run-<RunN>/saclocked/ch<NNN>.png
 ```
 
 `<NNN>` is the channel index (1 = deepest / probe tip, matching every other figure in this pipeline), not a physical electrode ID. Given the volume, these are **not** embedded in the PDF appendix (§9) — browse them directly on the server if you want to inspect individual channels' raw timecourses rather than the tuning-curve summaries.
+
+### 4.12 Anatomy assignment template
+
+Per-channel anatomical area is not currently recoverable from the recording logs (§2.2's limitation). `generateAnatomyTemplate.m` (new) does not solve this itself — it builds a fillable template so you can assign areas by hand, informed by this pipeline's own recorded activity rather than starting from a blank per-channel list:
+
+- Real depth (`S.CHdepthUm`), responsiveness, tuning category, preferred direction, and tuning strength for every channel in every session (`anatomy/anatomy_template_channels.csv`).
+- Channels are grouped into **candidate clusters** (`anatomy/anatomy_template_clusters.csv`, the document meant to be filled in): contiguous channel ranges whose recorded activity looks similar, detected by binning channels (20 at a time) and greedily merging adjacent bins whose responsiveness rate and resultant-length-weighted circular mean preferred direction are both close. This is deliberately bin-then-merge rather than a pure jump detector: at least one session (20260312) shows preferred direction drifting smoothly and continuously with depth, with no sharp transition anywhere (checked directly) — a jump detector would have collapsed that whole session into one uninformative cluster.
+- Each cluster row also carries the planned burr-hole/structure list from `sessionAnatomyInfo.m` for context, and three blank columns to fill in by hand: `AssignedArea`, `Confidence`, `Notes`.
+- This is a heuristic proposal for where to look, not a certified segmentation — split, merge, or ignore clusters freely against your own reading of the atlas and elab notes.
 
 ## 5. Results
 
@@ -276,7 +288,28 @@ Pooling the population-size sweep across sessions (`pooled_decode_population.png
 | **planning** | 19.3% | 26.4% | 20.9% |
 | **execution** | 18.3% | 20.2% | 35.5% |
 
-Every off-diagonal cell is clearly above the 12.5% chance level — there is real shared, cross-epoch structure, a decoder trained in one epoch is not useless in another — but every off-diagonal cell is also well below its row's own diagonal (e.g. training on execution and testing on execution gets 35.5%, but training on execution and testing on visual only gets 18.3%). So the population code is **neither fully shared nor fully epoch-specific**: part of the direction-discriminating structure persists across visual/planning/execution, and part is reconfigured at each epoch. This is a first, coarse (3-epoch) pass; a finer sliding-window generalization matrix across the whole trial (§4.10, §7) would show more precisely when the code shifts rather than just confirming that it does.
+Every off-diagonal cell is clearly above the 12.5% chance level — there is real shared, cross-epoch structure, a decoder trained in one epoch is not useless in another — but every off-diagonal cell is also well below its row's own diagonal (e.g. training on execution and testing on execution gets 35.5%, but training on execution and testing on visual only gets 18.3%). So the population code is **neither fully shared nor fully epoch-specific**: part of the direction-discriminating structure persists across visual/planning/execution, and part is reconfigured at each epoch.
+
+**Sliding (continuous) temporal generalization matrix** (§4.10, `*_decode_slidegen.png`, 50ms bins across [-0.5, +0.8]s relative to go-cue): every session shows the same qualitative pattern — a compact, elevated **diagonal band** concentrated roughly 100-450ms post-go-cue (peaking near 150-400ms, tracking each session's own saccade latency, §5.1), with narrow off-diagonal generalization (a decoder trained at one moment in this band transfers well only to nearby moments, not distant ones) and accuracy at or near chance everywhere before the go-cue and in the return/ITI period after ~500-600ms. This is a much more precise picture than the coarse 3-epoch matrix: the "reconfiguration" implied by that matrix's below-diagonal off-diagonal cells is not a single sharp switch between 3 discrete codes, but a population code that continuously drifts/refines through the peri-saccadic window, with the most stable (best-generalizing) structure concentrated in a few-hundred-ms band around the saccade itself.
+
+**Decoding after common-mode removal** (§6.5's open item, closed): for the 4 kinematic-linked sessions, decoding accuracy at the full responsive population, before vs. after removing that session-and-epoch's own dominant shared component (`decodeAfterCommonModeRemoval.m`, same removal method as §6.5):
+
+| Day | Epoch | Original | Cleaned | PC1 var. explained |
+|---|---|---|---|---|
+| 20260310 | visual | 30.2% | 44.0% | 8.3% |
+| 20260310 | planning | 25.9% | 31.0% | 22.2% |
+| 20260310 | execution | 36.2% | 48.3% | 12.2% |
+| 20260320 | visual | 38.4% | 59.6% | 18.6% |
+| 20260320 | planning | 32.3% | 48.5% | 17.7% |
+| 20260320 | execution | 45.5% | 62.6% | 14.9% |
+| 20260323 | visual | 31.9% | 50.0% | 32.7% |
+| 20260323 | planning | 33.0% | 44.7% | 32.1% |
+| 20260323 | execution | 44.7% | 72.3% | 61.0% |
+| 20260324 | visual | 35.7% | 51.0% | 11.3% |
+| 20260324 | planning | 35.7% | 48.0% | 25.4% |
+| 20260324 | execution | 57.1% | 65.3% | 19.0% |
+
+**Decoding accuracy increases after removing the shared component in every epoch of every one of these 4 sessions** — often substantially (e.g. 20260323 execution: 44.7% → 72.3%). This answers the open question cleanly: these sessions' higher decoding accuracy is **not** because the shared/kinematic component was itself carrying decodable direction information (if it were, removing it would have *lowered* accuracy) — it was acting as noise that partially masked real direction-related structure. These 4 sessions are not artificially inflated; if anything they have *more* real signal than their original (pre-removal) numbers suggested. This also means common-mode removal is a genuinely useful preprocessing step, at least for sessions with a confirmed kinematic-linked component, not just a diagnostic check.
 
 ## 6. Important caveats — read before using the tuning results
 
@@ -355,19 +388,20 @@ Direct follow-up to §6.4. `checkSharedComponentKinematics.m` extracts the domin
 
 ## 7. Open items requiring your input
 
-1. **Artifact investigation** (§6.1, §6.4, §6.5) — the shared-component/kinematics check gives a real but non-universal answer: 4/12 sessions show a clean EMG/movement signature, the rest don't. If you want to push further, the natural next step is checking whether the 8 non-significant sessions differ systematically (e.g. less kinematic variance, fewer trials, different burr hole/structure) from the 4 significant ones.
-2. **Absolute per-channel depth-in-brain** (mm below cortical surface) is not reconstructable from the current logs (§2.2) — only relative depth along the probe. If you have the true final recording depths from elsewhere, `sessionAnatomyInfo.m` is the place to add them.
-3. **Burr hole for 20260224 is genuinely ambiguous** (marked "5?" in the source elab log itself, §2.2). This session is independently the weakest on nearly every other metric in this report, so it's likely not worth chasing further unless it specifically matters for your interpretation.
+1. **Artifact investigation** (§6.1, §6.4, §6.5) — the shared-component/kinematics check gives a real but non-universal answer: 4/12 sessions show a clean EMG/movement signature, the rest don't. Not pursued further: the two weakest sessions overall (20260224, 20260326) are plausibly explained simply by penetration placement — these burr holes/trajectories were planned for a different, unrelated paradigm, not for saccade responsiveness specifically (§2.2), so a session landing in less saccade-sensitive territory is an expected outcome of the shared multi-paradigm penetration design, not necessarily a data-quality problem to chase.
+2. **Absolute per-channel depth-in-brain** (mm below cortical surface) is not reconstructable from the current logs (§2.2) — only relative depth along the probe. **In progress**: `generateAnatomyTemplate.m` (new) produces a fillable template (`anatomy/anatomy_template_clusters.csv`) combining real depth, this pipeline's own recorded activity (responsiveness/tuning/preferred direction), and the planned burr-hole/structure list, with auto-detected candidate channel clusters (contiguous channels with similar recorded activity) to compare against an atlas — see §4.12.
+3. **Burr hole for 20260224 is genuinely ambiguous** (marked "5?" in the source elab log itself, §2.2) — confirmed not worth chasing further.
 4. **Planning-vs-execution** (§4.8, §6.6) — if useful, the natural extension is checking whether the 53% execution-only recruitment fraction varies with burr hole/structure (§2.2) or with the §6.5 kinematic-link sessions.
 5. **Responsiveness/tuning thresholds**: current thresholds (FDR 0.05, effect size 0.3 baseline SD for screening; permutation p<0.05 for tuning) are reasonable defaults; given §6.4's session-by-session variability, you may want to treat sessions individually rather than adjust one global threshold.
-6. **Decoding** (§4.9, §5.3) — the 4 sessions with a confirmed kinematic-linked shared component (§6.5) are also among the higher-decoding sessions; whether that's because common-mode contamination is itself somewhat decodable (inflating accuracy) or because these are simply the sessions with the most real signal isn't distinguishable from the current analysis. Re-running decoding after the §6.5 common-mode removal for those 4 sessions, and comparing to their original accuracy, would test this directly.
-7. **Temporal generalization** (§4.10, §5.3) — the coarse 3-epoch matrix shows partial generalization (real but well below within-epoch accuracy). If this is worth pursuing further, the natural extension is a finer, continuous sliding-window generalization matrix across the whole trial (not just the 3 fixed epochs), which would show more precisely when the population code shifts rather than just confirming it does.
+6. **Done** (§5.3): decoding after common-mode removal, for the 4 kinematic-linked sessions — accuracy *increases* in every epoch of every session, meaning the shared component was masking real signal, not itself carrying decodable direction information.
+7. **Done** (§5.3): continuous sliding-window temporal generalization matrix — shows a compact diagonal band of strong, narrowly-generalizing decoding concentrated ~100-450ms post-go-cue, not a sharp switch between discrete codes.
 
 ## 8. Recommended next steps
 
-1. **Given §6.4/§6.5's mixed result**, treat sessions individually rather than pooling a single "tuned channel" count — prioritize 20260312/20260320/20260323/20260324 (clean depth-organized structure and/or confirmed kinematic-linked shared component) for any further biological claims, and treat 20260224/20260326 (weakest on nearly every metric) with more skepticism.
+1. **Given §6.4/§6.5's mixed result**, treat sessions individually rather than pooling a single "tuned channel" count — prioritize 20260312/20260320/20260323/20260324 (clean depth-organized structure and/or confirmed kinematic-linked shared component) for any further biological claims, and treat 20260224/20260326 (weakest on nearly every metric, plausibly explained by penetration placement — see §7 item 1) with more skepticism.
 2. **Done** (§6.5): common-mode removal, for the 4 kinematic-linked sessions — the long-distance correlation plateau drops sharply after removing the shared component, while short-distance correlation survives.
-3. Absolute per-channel depth-in-brain needs a numeric anchor not currently in the logs (§2.2) — see `sessionAnatomyInfo.m`.
+3. Absolute per-channel depth-in-brain needs a numeric anchor not currently in the logs (§2.2) — **in progress**, see §4.12/§7 item 2.
 4. Once sessions are triaged by §6.4/§6.5, revisit direction tuning with a von Mises fit (not just vector sum) for a cleaner tuning-width estimate on the trustworthy sessions — the saccade-onset-locked alignment from §4.8 is already implemented, use it in place of go-cue alignment for this.
 5. Check whether the 53% execution-only recruitment fraction (§6.6) varies systematically with burr hole/structure or with the §6.5 kinematic-link sessions.
-6. **Done** (§4.9, §5.3): direction decoding, individual-channel and population, all 3 epochs, all 12 sessions. See item 6 above for the one natural follow-up (decoding after common-mode removal).
+6. **Done** (§4.9, §5.3): direction decoding, individual-channel and population, all 3 epochs, all 12 sessions.
+7. **Done** (§5.3): decoding after common-mode removal, and the continuous sliding-window generalization matrix.

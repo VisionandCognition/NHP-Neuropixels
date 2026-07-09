@@ -43,6 +43,7 @@ FIG_ORDER = [
     ('decode_channels', 'Direction decoding, individual channels: accuracy by depth, planning-vs-execution and visual-vs-execution scatters with marginal histograms'),
     ('decode_population', 'Direction decoding, population: accuracy vs. number of channels pooled, chance=12.5%'),
     ('decode_genmatrix', 'Temporal generalization matrix: train epoch x test epoch, chance=12.5%'),
+    ('decode_slidegen', 'Sliding temporal generalization matrix: 50ms bins across the whole trial, chance=12.5%'),
 ]
 
 CSS = """
