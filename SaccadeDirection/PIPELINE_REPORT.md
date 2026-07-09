@@ -88,7 +88,11 @@ Each `_extracted.mat` stores this verified path as `S.LogFile`. **Do not use `S.
 | `classifyTuning.m` | Combines the vector-sum permutation test with a Kruskal-Wallis omnibus test into 3 tuning categories (§4.7): directional / complex / untuned. |
 | `analyzePlanningExecution.m` | Splits go-cue-relative and saccade-onset-locked windows into planning vs execution epochs, separately screened and tuned (§4.8). |
 | `summarizePlanningExecution.m` | Quantifies the planning/execution split across all 12 sessions (§6.6): recruitment fractions, preferred-direction consistency. |
-| `checkSharedComponentKinematics.m` | Correlates the dominant shared trial-residual component (PC1) against saccade kinematics (§6.5). |
+| `checkSharedComponentKinematics.m` | Correlates the dominant shared trial-residual component (PC1) against saccade kinematics (§6.5), and common-mode removal for kinematic-linked sessions. |
+| `decodeDirection.m` | 8-way direction decoding (individual channels + population-size sweep), all 3 epochs (§4.9). |
+| `decodeTemporalGeneralization.m` | Cross-epoch (train/test) decoding matrix (§4.10). |
+| `summarizeDecoding.m` | Pools decoding results across all 12 sessions. |
+| `plotDirectionTimecourses.m` | Per-channel mean MUA timecourse by direction, go-cue-locked and saccade-onset-locked (§4.11). |
 | `runFullPipeline.m` | Runs all of the above end to end. |
 
 ## 4. Key methodological decisions (and why)
@@ -178,6 +182,24 @@ Two complementary views, per session per epoch:
 Direct follow-up to §4.9: decoding well in an epoch only shows that direction information is present *at that time* — it doesn't say whether the population structure that carries it (which channels prefer which direction) is the *same* structure across epochs, or gets reconfigured. `decodeTemporalGeneralization.m` tests this directly: train the nearest-centroid decoder on one epoch's population response, test it on **another** epoch's response for the same held-out trials (leave-one-trial-out, full responsive population), for every (train, test) pair among visual/planning/execution — a 3×3 matrix per session. The diagonal (train and test the same epoch) is exactly §4.9's ordinary same-epoch accuracy; the off-diagonal cells are the new information: if a decoder trained on one epoch still classifies well on another, the code generalizes (shared structure); if it drops to chance, the code is epoch-specific (reconfigured). Standardization (z-scoring) is always computed from the **train** epoch's own statistics and applied to the test epoch's data, so this is a genuine test of whether the trained decision boundary transfers, not just whether both epochs are independently informative.
 
 This first pass uses the same 3 fixed epoch windows as §4.8/§4.9 (a coarse 3×3 matrix); a finer, continuous sliding-window version across the whole trial is a natural extension if the coarse version looks informative (see §7).
+
+### 4.11 Per-channel direction timecourses
+
+A direct, model-free complement to the tuning/decoding analyses above: for every responsive channel, the mean MUA timecourse (correct trials only) split into the 8 directions and overlaid, rather than reduced to a single-window number. Two alignments, `plotDirectionTimecourses.m`:
+
+- **go-cue-locked**: the trial's own time base, window [-0.9, +1.0]s relative to go-cue — wide enough to show fixation, stimulus flash, delay, go-cue, target-end, and the return saccade all in one plot.
+- **saccade-onset-locked**: each trial's MUA linearly interpolated onto a common time axis relative to its own detected saccade onset (necessary because onset time varies trial to trial — a simple index shift would misalign different trials' actual event times), window [-0.5, +0.8]s relative to onset.
+
+Each direction's mean trace is smoothed (zero-phase Gaussian, 50ms window) before plotting — purely a display transform on the already-trial-averaged trace, not a change to `S.MUA` or any other analysis in this pipeline. A lighter 20ms window was tried first and left the trace visually indistinguishable from unsmoothed, since the underlying MUA is itself a 200Hz-bandwidth envelope with real high-frequency content; 50ms visibly reduces trial-count noise while still preserving genuine trial-to-trial structure (checked against an unsmoothed reference before choosing this value).
+
+This produces one figure per responsive channel per session per alignment (~3200 channels × 2 ≈ 6400 figures total), organized into subfolders rather than the flat `figures/` directory used elsewhere in this pipeline:
+
+```
+data/figures/timecourses/<Day>_run-<RunN>/gocue/ch<NNN>.png
+data/figures/timecourses/<Day>_run-<RunN>/saclocked/ch<NNN>.png
+```
+
+`<NNN>` is the channel index (1 = deepest / probe tip, matching every other figure in this pipeline), not a physical electrode ID. Given the volume, these are **not** embedded in the PDF appendix (§9) — browse them directly on the server if you want to inspect individual channels' raw timecourses rather than the tuning-curve summaries.
 
 ## 5. Results
 
