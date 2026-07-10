@@ -78,7 +78,7 @@ Each `_extracted.mat` stores this verified path as `S.LogFile`. **Do not use `S.
 | `matchTTLtoLogEvents.m` | Matches TTL digital-line numbers to behavioral event names by rising-edge count. |
 | `extractSaccadeSession.m` | Core extraction: MUA + eye channels, trial table, eye calibration. One `.mat` output per session. |
 | `runAllExtraction.m` | Batch driver over all 12 runs, tolerant of per-run failures. |
-| `loadAllSessions.m` | Loads all extracted `.mat` files into one struct array. |
+| `loadAllSessions.m` | Loads all extracted `.mat` files into one struct array; attaches `S.channelArea` (§4.12) to each. |
 | `screenResponsiveChannels.m` | Per-channel, per-session responsiveness test in 4 task epochs vs. baseline. |
 | `computeDirectionTuning.m` | 8-direction tuning curve, preferred direction, permutation significance, for responsive channels. |
 | `analyzeEyeData.m` | Eye calibration application, saccade detection, fixation/pupil/main-sequence analysis. |
@@ -96,6 +96,7 @@ Each `_extracted.mat` stores this verified path as `S.LogFile`. **Do not use `S.
 | `decodeAfterCommonModeRemoval.m` | Decoding before/after common-mode removal, for the 4 kinematic-linked sessions (§5.3). |
 | `decodeSlidingGeneralization.m` | Continuous sliding-window temporal generalization matrix (§4.10, §5.3). |
 | `generateAnatomyTemplate.m` | Builds the fillable per-channel/cluster anatomy assignment template (§4.12). |
+| `getChannelArea.m` | Looks up assigned area/hierarchical labels for a session's channels (§4.12). |
 | `runFullPipeline.m` | Runs all of the above end to end. |
 
 ## 4. Key methodological decisions (and why)
@@ -212,6 +213,10 @@ Per-channel anatomical area is not currently recoverable from the recording logs
 - Channels are grouped into **candidate clusters** (`anatomy/anatomy_template_clusters.csv`, the document meant to be filled in): contiguous channel ranges whose recorded activity looks similar, detected by binning channels (20 at a time) and greedily merging adjacent bins whose responsiveness rate and resultant-length-weighted circular mean preferred direction are both close. This is deliberately bin-then-merge rather than a pure jump detector: at least one session (20260312) shows preferred direction drifting smoothly and continuously with depth, with no sharp transition anywhere (checked directly) — a jump detector would have collapsed that whole session into one uninformative cluster.
 - Each cluster row also carries the planned burr-hole/structure list from `sessionAnatomyInfo.m` for context, and three blank columns to fill in by hand: `AssignedArea`, `Confidence`, `Notes`.
 - This is a heuristic proposal for where to look, not a certified segmentation — split, merge, or ignore clusters freely against your own reading of the atlas and elab notes.
+
+**Filled in and wired into the pipeline.** Every cluster in `anatomy_template_clusters.csv` now has a hand-assigned `AssignedArea`, cross-referenced against `anatomy_template_clusters_hierarchical.csv` (a parallel hierarchical parcellation, L6=finest to L3=coarsest, per cluster). Both are propagated down to every individual channel in `anatomy_template_channels.csv` (`ClusterID`, `AssignedArea`, `L6`-`L3` columns, all 4608 channel rows across the 12 sessions, verified zero gaps/overlaps in cluster coverage).
+
+`getChannelArea.m` (new) looks up these labels for a given day/run/channel(s) directly, and `loadAllSessions.m` now attaches this automatically as `S.channelArea` for every session — `S.channelArea.AssignedArea{c}` (finest tentative label) or `S.channelArea.L6/.L5/.L4/.L3{c}` (hierarchical, coarser toward L3), for channel `c` (1 = deepest, matching every other per-channel array in this pipeline, e.g. `S.CHdepthUm`). These are **tentative, hand-assigned labels compared against an atlas by eye, propagated per-cluster** — not a verified histological registration — but now available to any analysis in this pipeline without re-deriving them.
 
 ## 5. Results
 
@@ -389,7 +394,7 @@ Direct follow-up to §6.4. `checkSharedComponentKinematics.m` extracts the domin
 ## 7. Open items requiring your input
 
 1. **Artifact investigation** (§6.1, §6.4, §6.5) — the shared-component/kinematics check gives a real but non-universal answer: 4/12 sessions show a clean EMG/movement signature, the rest don't. Not pursued further: the two weakest sessions overall (20260224, 20260326) are plausibly explained simply by penetration placement — these burr holes/trajectories were planned for a different, unrelated paradigm, not for saccade responsiveness specifically (§2.2), so a session landing in less saccade-sensitive territory is an expected outcome of the shared multi-paradigm penetration design, not necessarily a data-quality problem to chase.
-2. **Absolute per-channel depth-in-brain** (mm below cortical surface) is not reconstructable from the current logs (§2.2) — only relative depth along the probe. **In progress**: `generateAnatomyTemplate.m` (new) produces a fillable template (`anatomy/anatomy_template_clusters.csv`) combining real depth, this pipeline's own recorded activity (responsiveness/tuning/preferred direction), and the planned burr-hole/structure list, with auto-detected candidate channel clusters (contiguous channels with similar recorded activity) to compare against an atlas — see §4.12.
+2. **Absolute per-channel depth-in-brain** (mm below cortical surface) is not reconstructable from the current logs (§2.2) — only relative depth along the probe. **Done, partially**: per-channel tentative area labels (hand-assigned against an atlas, using the §4.12 template) are now filled in and available via `S.channelArea` — this is a usable stand-in for absolute depth-in-brain for most purposes, though it's still an eyeballed atlas comparison, not a verified histological registration.
 3. **Burr hole for 20260224 is genuinely ambiguous** (marked "5?" in the source elab log itself, §2.2) — confirmed not worth chasing further.
 4. **Planning-vs-execution** (§4.8, §6.6) — if useful, the natural extension is checking whether the 53% execution-only recruitment fraction varies with burr hole/structure (§2.2) or with the §6.5 kinematic-link sessions.
 5. **Responsiveness/tuning thresholds**: current thresholds (FDR 0.05, effect size 0.3 baseline SD for screening; permutation p<0.05 for tuning) are reasonable defaults; given §6.4's session-by-session variability, you may want to treat sessions individually rather than adjust one global threshold.
