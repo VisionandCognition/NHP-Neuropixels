@@ -255,7 +255,7 @@ text(axText, 0, 1, txt, 'Units', 'normalized', 'VerticalAlignment', 'top', ...
     'FontSize', 8, 'Interpreter', 'none', 'Color', 'k');
 
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_overview.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'overview', S.Day, S.RunN));
 close(f);
 end
 

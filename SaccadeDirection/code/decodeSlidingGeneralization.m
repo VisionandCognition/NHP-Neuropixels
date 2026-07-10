@@ -137,6 +137,6 @@ plot(ax, [min(binCentersMs) max(binCentersMs)], [min(binCentersMs) max(binCenter
 xlabel(ax, 'Test time from go-cue (ms)'); ylabel(ax, 'Train time from go-cue (ms)');
 title(ax, sprintf('%s run-%03d: sliding temporal generalization matrix\n(nearest-centroid, LOO-CV, chance=12.5%%, full responsive population)', S.Day, S.RunN), 'FontSize', 9);
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_decode_slidegen.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'decode_slidegen', S.Day, S.RunN));
 close(f);
 end

@@ -293,6 +293,6 @@ xlabel(ax6, 'Direction (deg)'); ylabel(ax6, 'Endpoint error (dva)');
 title(ax6, 'Saccade accuracy by direction');
 
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_eye_summary.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'eye_summary', S.Day, S.RunN));
 close(f);
 end

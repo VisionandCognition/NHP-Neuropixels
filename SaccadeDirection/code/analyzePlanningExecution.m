@@ -341,7 +341,7 @@ title(ax4, sprintf('PD planning vs execution (n=%d tuned in both)', sum(tunedBot
 
 title(tl, sprintf('%s run-%03d: visual / planning / execution (%s-anchored)', S.Day, S.RunN, modeName));
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_planexec_%s.png', S.Day, S.RunN, modeName)));
+saveas(f, figSavePath(opts.figDir, sprintf('planexec_%s', modeName), S.Day, S.RunN));
 close(f);
 end
 
@@ -397,7 +397,7 @@ title(tl, sprintf(['%s run-%03d: visual (top) / planning (mid) / execution (bott
     winLabel('visual',r.windows.visual), winLabel('planning',r.windows.planning), winLabel('execution',r.windows.execution)), ...
     'FontSize', 10);
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_planexec_%s_curves.png', S.Day, S.RunN, modeName)));
+saveas(f, figSavePath(opts.figDir, sprintf('planexec_%s_curves', modeName), S.Day, S.RunN));
 close(f);
 end
 

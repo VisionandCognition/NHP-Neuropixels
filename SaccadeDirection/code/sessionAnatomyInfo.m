@@ -10,7 +10,15 @@ function info = sessionAnatomyInfo(day)
 % source log itself was uncertain), channelSelection (string, the online
 % electrode-bank/section selection used that day), plannedDepthMm
 % (approximate planned total insertion depth for that burr hole, from
-% Chamber2Holes.docx), structures (cell array, superficial to deep).
+% Chamber2Holes.docx), structures (cell array, superficial to deep),
+% estimatedInsertionDepthMm (best available estimate of how far the probe
+% tip actually went into the brain that day -- an explicit per-session
+% value where the elab log encodes one directly in the channel-selection
+% string (e.g. "Ch2H2@53mm" -> 53mm; only 20260324/20260325 have this),
+% otherwise the burr hole's Chamber2Holes PLANNED depth, since actual
+% insertion depth tracks the plan closely in the sessions where both are
+% known -- see PIPELINE_REPORT.md sec 4.12/4.13), depthSource ('explicit'
+% or 'planned', which of the above applied for that day).
 %
 % SOURCE AND LIMITATIONS (read before using this for anything beyond a
 % qualitative "roughly what region" annotation):
@@ -70,10 +78,24 @@ entry = T(day);
 holeKey = regexprep(entry.burrHole, '\?', ''); % strip uncertainty marker for the lookup
 hi = holeInfo(holeKey);
 
+% explicit per-session final depth, where the elab channel-selection
+% string encodes one directly (e.g. "Ch2H2@53mm", "Ch2H1@53") -- more
+% precise than the generic per-hole plan where available.
+explicitDepthMm = containers.Map();
+explicitDepthMm('20260324') = 53;
+explicitDepthMm('20260325') = 53;
+
 info = struct();
 info.burrHole = entry.burrHole;
 info.channelSelection = entry.channelSelection;
 info.plannedDepthMm = hi.plannedDepthMm;
 info.structures = hi.structures;
+if isKey(explicitDepthMm, day)
+    info.estimatedInsertionDepthMm = explicitDepthMm(day);
+    info.depthSource = 'explicit';
+else
+    info.estimatedInsertionDepthMm = hi.plannedDepthMm;
+    info.depthSource = 'planned';
+end
 
 end

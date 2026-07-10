@@ -85,7 +85,8 @@ title(ax, sprintf('Pooled across 12 sessions: direction decoding vs. population 
     strjoin(arrayfun(@(n) num2str(n), nSessAtSize, 'UniformOutput', false), ',')), 'FontSize', 9);
 forceLightTheme(f);
 figDir = fullfile(saccadeDataDir(), 'figures');
-saveas(f, fullfile(figDir, 'pooled_decode_population.png'));
+if ~isfolder(fullfile(figDir,'pooled')), mkdir(fullfile(figDir,'pooled')); end
+saveas(f, fullfile(figDir, 'pooled', 'pooled_decode_population.png'));
 close(f);
-fprintf('saved %s\n', fullfile(figDir, 'pooled_decode_population.png'));
+fprintf('saved %s\n', fullfile(figDir, 'pooled', 'pooled_decode_population.png'));
 end

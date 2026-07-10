@@ -170,7 +170,7 @@ title(tl, sprintf(['%s run-%03d: ALL responsive channels (n=%d) -- ' ...
     'red = directional (n=%d), orange = complex/non-unimodal (n=%d), gray = untuned'], ...
     S.Day, S.RunN, nShow, nDirectional, nComplex));
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_tuning_examples.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'tuning_examples', S.Day, S.RunN));
 close(f);
 
 % --- tuning_matrix.png: all responsive channels, sorted by preferred
@@ -215,7 +215,7 @@ if numel(rows) >= 2
     title(axT, {'category', '(red=dir,orange=cx)'}, 'FontSize', 7);
 
     forceLightTheme(f2);
-    saveas(f2, fullfile(opts.figDir, sprintf('%s_run-%03d_tuning_matrix.png', S.Day, S.RunN)));
+    saveas(f2, figSavePath(opts.figDir, 'tuning_matrix', S.Day, S.RunN));
     close(f2);
 end
 end
@@ -265,6 +265,6 @@ title(ax3, 'Preferred direction vs. real depth (this session only)');
 title(tl, sprintf('%s run-%03d population summary -- burr hole %s (%s)', ...
     S.Day, S.RunN, anat.burrHole, strjoin(anat.structures, ' -> ')), 'Interpreter', 'none');
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_population_summary.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'population_summary', S.Day, S.RunN));
 close(f);
 end

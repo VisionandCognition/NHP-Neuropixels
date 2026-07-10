@@ -147,7 +147,7 @@ end
 title(tl, sprintf('%s run-%03d: shared-artifact check (uniform-with-distance = artifact-like; decaying = neural-like)', ...
     S.Day, S.RunN));
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_artifact_check.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'artifact_check', S.Day, S.RunN));
 close(f);
 end
 

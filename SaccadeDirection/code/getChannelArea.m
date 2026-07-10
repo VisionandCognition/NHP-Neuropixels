@@ -1,4 +1,4 @@
-function anat = getChannelArea(day, runN, channelIdx)
+function anat = getChannelArea(day, runN, channelIdx, chDepthUm)
 % GETCHANNELAREA Looks up the tentative anatomical area for one or more
 % channels of a given session, from the hand-filled
 % anatomy/anatomy_template_channels.csv (see generateAnatomyTemplate.m
@@ -8,13 +8,27 @@ function anat = getChannelArea(day, runN, channelIdx)
 % eye (per-cluster, then propagated to every channel in that cluster) --
 % not a verified histological registration. Treat accordingly.
 %
-% anat = getChannelArea(day, runN, channelIdx)
+% If chDepthUm is supplied (S.CHdepthUm, i.e. each channel's real
+% distance from the probe TIP in um), this also anchors an ESTIMATED
+% absolute depth below the cortical/brain surface per channel, using
+% sessionAnatomyInfo.m's estimatedInsertionDepthMm for that day (§4.13):
+%   DepthBelowSurfaceMm(c) = estimatedInsertionDepthMm - chDepthUm(c)/1000
+% Channel 1 (the tip) went deepest, so it gets the full insertion depth;
+% a NEGATIVE value means that channel is estimated to sit ABOVE the
+% brain surface (in the guide tube / dura / CSF, not brain tissue) at the
+% depth the probe was actually driven to that day.
+%
+% anat = getChannelArea(day, runN, channelIdx, chDepthUm)
 %   day        : 'YYYYMMDD' string (or numeric, matches either)
 %   runN       : run number (numeric)
 %   channelIdx : vector of channel indices (1 = deepest / probe tip,
 %                matching every other per-channel array in this
 %                pipeline, e.g. S.CHdepthUm). Default: every channel
 %                present for that session in the anatomy table.
+%   chDepthUm  : optional, S.CHdepthUm for this session (same length/
+%                order as the full channel set, indexed by channelIdx) --
+%                if omitted, DepthBelowSurfaceMm/EstimatedInsertionDepthMm/
+%                DepthSource are returned as NaN/''.
 %
 % Returns a scalar struct, each field a 1 x numel(channelIdx) array
 % aligned to channelIdx:
@@ -22,6 +36,9 @@ function anat = getChannelArea(day, runN, channelIdx)
 %   .AssignedArea  (cellstr, '' if no match) -- the finest/tentative label
 %   .L6 .L5 .L4 .L3 (cellstr, '' if no match) -- hierarchical parcellation,
 %                    L6 finest to L3 coarsest (see anatomy_template_clusters_hierarchical.csv)
+%   .DepthBelowSurfaceMm (double, NaN unless chDepthUm supplied)
+%   .EstimatedInsertionDepthMm (double, same value repeated -- for reference)
+%   .DepthSource (cellstr, 'explicit' or 'planned', see sessionAnatomyInfo.m)
 %
 % Usage in this pipeline: loadAllSessions.m attaches this automatically
 % as S.channelArea for every session, so any analysis can use e.g.
@@ -69,4 +86,16 @@ anat.L6(found) = cellstr(Tsub.L6(loc(found)));
 anat.L5(found) = cellstr(Tsub.L5(loc(found)));
 anat.L4(found) = cellstr(Tsub.L4(loc(found)));
 anat.L3(found) = cellstr(Tsub.L3(loc(found)));
+
+anat.DepthBelowSurfaceMm = nan(1, n);
+anat.EstimatedInsertionDepthMm = nan(1, n);
+anat.DepthSource = repmat({''}, 1, n);
+if nargin >= 4 && ~isempty(chDepthUm)
+    info = sessionAnatomyInfo(char(dayStr));
+    chDepthUm = chDepthUm(:)';
+    valid = channelIdx >= 1 & channelIdx <= numel(chDepthUm);
+    anat.DepthBelowSurfaceMm(valid) = info.estimatedInsertionDepthMm - chDepthUm(channelIdx(valid))/1000;
+    anat.EstimatedInsertionDepthMm(valid) = info.estimatedInsertionDepthMm;
+    anat.DepthSource(valid) = {info.depthSource};
+end
 end

@@ -85,7 +85,7 @@ def build_appendix() -> str:
         run = RUN_OVERRIDE.get(day, '003')
         lines.append(f'### {day} (run-{run})\n')
         for suffix, caption in FIG_ORDER:
-            fn = FIGDIR / f'{day}_run-{run}_{suffix}.png'
+            fn = FIGDIR / suffix / f'{day}_run-{run}.png'
             if not fn.exists():
                 lines.append(f'*(missing: {fn.name})*\n')
                 continue
@@ -116,7 +116,7 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         report_text = REPORT_MD.read_text()
-        pooled_decode_fig = FIGDIR / 'pooled_decode_population.png'
+        pooled_decode_fig = FIGDIR / 'pooled' / 'pooled_decode_population.png'
         if pooled_decode_fig.exists():
             report_text = report_text.replace(
                 '<!-- POOLED_DECODE_FIGURE -->',

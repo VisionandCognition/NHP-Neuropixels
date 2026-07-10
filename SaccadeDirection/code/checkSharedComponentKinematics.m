@@ -208,6 +208,6 @@ set(ax4, 'Color', 'w');
 
 title(tl, sprintf('%s run-%03d: shared-component / kinematics check', S.Day, S.RunN));
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_shared_kinematics.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'shared_kinematics', S.Day, S.RunN));
 close(f);
 end

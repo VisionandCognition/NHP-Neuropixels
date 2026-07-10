@@ -163,6 +163,6 @@ for i = 1:3
 end
 title(ax, sprintf('%s run-%03d: temporal generalization matrix\n(nearest-centroid, LOO-CV, chance=12.5%%, full responsive population)', S.Day, S.RunN), 'FontSize', 9);
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_decode_genmatrix.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'decode_genmatrix', S.Day, S.RunN));
 close(f);
 end

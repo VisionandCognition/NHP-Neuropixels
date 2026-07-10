@@ -210,7 +210,7 @@ plotScatterMarginals(f, 0.68, chanAcc(:,1)*100, chanAcc(:,3)*100, ...
 st = sgtitle(f, sprintf('%s run-%03d: individual-channel direction decoding (nearest-centroid, LOO-CV, chance=12.5%%)', S.Day, S.RunN));
 st.Color = 'k'; % forceLightTheme's generic text sweep doesn't reliably reach sgtitle's internal text object
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_decode_channels.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'decode_channels', S.Day, S.RunN));
 close(f);
 end
 
@@ -265,6 +265,6 @@ ylim(ax, [0 100]);
 legend(ax, hs, epochNames, 'Location', 'southeast', 'TextColor', 'k', 'Color', 'w');
 title(ax, sprintf('%s run-%03d: population direction decoding vs. population size\n(nearest-centroid, LOO-CV, %d reps/size, chance=12.5%%)', S.Day, S.RunN, size(popAcc,3)));
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, sprintf('%s_run-%03d_decode_population.png', S.Day, S.RunN)));
+saveas(f, figSavePath(opts.figDir, 'decode_population', S.Day, S.RunN));
 close(f);
 end
