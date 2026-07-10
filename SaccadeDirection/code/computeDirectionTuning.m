@@ -151,13 +151,26 @@ nDirectional = sum(strcmp({tuning(rows).category}, 'directional'));
 nComplex = sum(strcmp({tuning(rows).category}, 'complex'));
 for i = 1:nShow
     r = rowsByDepth(i);
-    ax = nexttile(tl);
+    ax = nexttile(tl); hold(ax, 'on');
     v = tuning(r).meanByDir;
-    vn = (v - min(v)) / max(range(v), eps); % per-channel min-max, just for compact display
+    normFactor = max(range(v), eps);
+    vn = (v - min(v)) / normFactor; % per-channel min-max, just for compact display
+    % SEM scaled by the SAME normalization factor -- not just cosmetic:
+    % a curve can look sharply "peaked" once stretched to fill [0,1]
+    % regardless of whether that peak is bigger than the trial-to-trial
+    % noise or not (min-max normalization erases absolute effect size).
+    % Plotting error bars in the same normalized units directly shows
+    % whether a visually-obvious-looking peak is actually distinguishable
+    % from noise -- e.g. a channel can fail the permutation test at
+    % p=0.06 with a real-looking peak simply because its error bars at
+    % the peak and trough overlap once you look at them (verified
+    % directly against several borderline "untuned" channels before
+    % making this change).
+    semN = tuning(r).semByDir / normFactor;
     [~, col] = classifyTuning(tuning(r).pPerm, tuning(r).pKW);
-    plot(ax, [dirsDeg dirsDeg(1)+360], [vn vn(1)], '-o', 'Color', col, 'MarkerFaceColor', col, ...
-        'LineWidth', 1, 'MarkerSize', 2);
-    ylim(ax, [-0.1 1.1]);
+    errorbar(ax, [dirsDeg dirsDeg(1)+360], [vn vn(1)], [semN semN(1)], '-o', ...
+        'Color', col, 'MarkerFaceColor', col, 'LineWidth', 1, 'MarkerSize', 2, 'CapSize', 2);
+    ylim(ax, [-0.5 1.5]); % wider than [-0.1 1.1] -- SEM whiskers can extend past the normalized curve's own min/max
     xticks(ax, []); yticks(ax, []);
     if strcmp(tuning(r).category, 'untuned')
         set(ax, 'XColor', [0.85 0.85 0.85], 'YColor', [0.85 0.85 0.85], 'LineWidth', 0.5, 'Box', 'on');
