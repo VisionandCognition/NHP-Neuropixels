@@ -177,8 +177,11 @@ resp = resp(:)';
 dirDeg = dirDeg(:)';
 dirGroup = round(dirDeg/45) + 1;
 meanByDir = nan(1,8);
+semByDir = nan(1,8);
 for d = 1:8
-    meanByDir(d) = mean(resp(dirGroup==d), 'omitnan');
+    v = resp(dirGroup==d); v = v(~isnan(v));
+    meanByDir(d) = mean(v);
+    semByDir(d) = std(v) / sqrt(max(numel(v),1));
 end
 w = max(meanByDir, 0);
 if sum(w) > 0
@@ -225,6 +228,7 @@ tuning.pPerm = pPerm;
 tuning.pKW = pKW;
 tuning.tuned = pPerm < 0.05;
 tuning.meanByDir = meanByDir;
+tuning.semByDir = semByDir;
 end
 
 % ------------------------------------------------------------------
@@ -248,7 +252,7 @@ end
 fdrP = bhFDR(p);
 respFlag = fdrP < opts.alpha & abs(eff) > opts.minEffect;
 
-emptyTuning = struct('prefDir',nan,'resultantLen',nan,'pPerm',nan,'pKW',nan,'tuned',false,'meanByDir',nan(1,8));
+emptyTuning = struct('prefDir',nan,'resultantLen',nan,'pPerm',nan,'pKW',nan,'tuned',false,'meanByDir',nan(1,8),'semByDir',nan(1,8));
 tuning = repmat(emptyTuning, 1, nChan);
 for c = 1:nChan
     if respFlag(c)
@@ -371,24 +375,30 @@ for i = 1:nShow
     tilePlan = tileVis + nCol;
     tileExec = tilePlan + nCol;
 
+    % SEM error bars (raw units, no normalization here unlike
+    % tuning_examples.png -- these curves are already plotted in raw
+    % response units, not min-max stretched) so a visually-peaked-looking
+    % curve visually explains its own category: tight error bars around a
+    % peak read as reliable, error bars that swallow the peak-vs-trough
+    % difference read as noise -- see PIPELINE_REPORT sec 4.7.
     axV = nexttile(tl, tileVis);
-    vV = r.tuningVisual(c).meanByDir;
-    plot(axV, [dirsDeg dirsDeg(1)+360], [vV vV(1)], '-o', 'Color', colVis(i,:), ...
-        'MarkerFaceColor', colVis(i,:), 'LineWidth', 1.2, 'MarkerSize', 3);
+    vV = r.tuningVisual(c).meanByDir; eV = r.tuningVisual(c).semByDir;
+    errorbar(axV, [dirsDeg dirsDeg(1)+360], [vV vV(1)], [eV eV(1)], '-o', 'Color', colVis(i,:), ...
+        'MarkerFaceColor', colVis(i,:), 'LineWidth', 1.2, 'MarkerSize', 3, 'CapSize', 2);
     set(axV, 'XTick', [], 'Color', 'w');
     title(axV, sprintf('ch%d: visual (%s)', c, catVis{i}), 'FontSize', 6, 'FontWeight', 'normal');
 
     axP = nexttile(tl, tilePlan);
-    vP = r.tuningPlan(c).meanByDir;
-    plot(axP, [dirsDeg dirsDeg(1)+360], [vP vP(1)], '-o', 'Color', colPlan(i,:), ...
-        'MarkerFaceColor', colPlan(i,:), 'LineWidth', 1.2, 'MarkerSize', 3);
+    vP = r.tuningPlan(c).meanByDir; eP = r.tuningPlan(c).semByDir;
+    errorbar(axP, [dirsDeg dirsDeg(1)+360], [vP vP(1)], [eP eP(1)], '-o', 'Color', colPlan(i,:), ...
+        'MarkerFaceColor', colPlan(i,:), 'LineWidth', 1.2, 'MarkerSize', 3, 'CapSize', 2);
     set(axP, 'XTick', [], 'Color', 'w');
     title(axP, sprintf('ch%d: plan (%s)', c, catPlan{i}), 'FontSize', 6, 'FontWeight', 'normal');
 
     axE = nexttile(tl, tileExec);
-    vE = r.tuningExec(c).meanByDir;
-    plot(axE, [dirsDeg dirsDeg(1)+360], [vE vE(1)], '-o', 'Color', colExec(i,:), ...
-        'MarkerFaceColor', colExec(i,:), 'LineWidth', 1.2, 'MarkerSize', 3);
+    vE = r.tuningExec(c).meanByDir; eE = r.tuningExec(c).semByDir;
+    errorbar(axE, [dirsDeg dirsDeg(1)+360], [vE vE(1)], [eE eE(1)], '-o', 'Color', colExec(i,:), ...
+        'MarkerFaceColor', colExec(i,:), 'LineWidth', 1.2, 'MarkerSize', 3, 'CapSize', 2);
     set(axE, 'XTick', [], 'Color', 'w');
     title(axE, sprintf('ch%d: exec (%s)', c, catExec{i}), 'FontSize', 6, 'FontWeight', 'normal');
 end
