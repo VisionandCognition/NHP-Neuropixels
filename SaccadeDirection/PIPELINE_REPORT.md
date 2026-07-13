@@ -103,6 +103,7 @@ Each `_extracted.mat` stores this verified path as `S.LogFile`. **Do not use `S.
 | `extractAreaTokens.m` | Parses candidate area abbreviation tokens out of a free-text anatomy label, for liberal multi-label pooling (§6.7). |
 | `poolTuningByArea.m` | Pools responsiveness/tuning across all 12 sessions by area, liberally (§6.7). |
 | `decodeByArea.m` | Direction decoding restricted to each area's channels, size-matched across sessions (§6.8). |
+| `poolPlanExecByArea.m` | Planning-vs-execution recruitment (§6.6) pooled by area instead of by session. |
 | `runFullPipeline.m` | Runs all of the above end to end. |
 
 ## 4. Key methodological decisions (and why)
@@ -406,6 +407,13 @@ Direct follow-up to §6.4. `checkSharedComponentKinematics.m` extracts the domin
 - **Pooled across the other 10 sessions: 835 channel-instances were `directional` in execution; only 47% of those were also `directional` during planning — 53% (439) only became directional during execution**, i.e. genuine recruitment of additional direction-selective activity around the movement, not just an amplitude increase on an already-tuned population.
 - Conversely, of 606 `directional`-in-planning channel-instances, 65% remained `directional` into execution (35%, 210, were planning-only).
 - **For channels tuned in both epochs, preferred direction is meaningfully consistent, not independent**: mean absolute angular difference (planning vs execution), pooled = **40.5°**, well below the ~90° expected for unrelated/random pairings, though far from 0°. Per-session values range from 14.5° (20260325, very consistent) to ~50–80° (20260226, 20260303, 20260317 — closer to random, though these sessions also have the fewest both-tuned channels).
+
+**The pooled 53% execution-only figure hides substantial area-level heterogeneity.** `poolPlanExecByArea.m` redoes this split BY AREA (same liberal multi-label pooling as §6.7) instead of collapsing across all channels: %execution-only ranges from **87% (PCC)** down to **8% (CMN-PF)**, a clean, near-monotonic gradient, not a single characteristic value. Two ends worth calling out specifically:
+- **LMID/MRT/RTMID (the highest tuning-fraction area in §6.7, 49.3% directional) shows the LOWEST execution-only fraction of any well-sampled area (11.7%, n=60 execution-directional channel-instances)** — i.e. this population's direction selectivity is mostly *already present during planning*, not newly recruited at movement time. This is a real, distinct finding from §6.7's tuning-fraction result: high tuning fraction here reflects a stable, persistent direction code, not a code that emerges around the saccade.
+- **PCC, FUNDUS_IPS, VM_IPS, SI sit at the opposite end (80-87% execution-only)** — channels here that show direction tuning at all are almost entirely recruited during the movement itself, with little to no persistent planning-related signal.
+- SC/CO sits roughly in the middle (51.3% execution-only, close to the old pooled 53% number) — apparently a genuine mix of persistent and newly-recruited direction-selective channels, not clearly at either extreme.
+
+Full per-area table and figure (`planexec_by_area.png`) saved to `data/figures/pooled/` and `data/planexec_pooled_by_area.mat`. Same caveats as §6.7/§6.8 apply (liberal pooling, small per-area sample sizes for some areas — reported only where an area has ≥8 execution-directional channel-instances).
 
 ### 6.7 Pooling responsiveness/tuning by area, across all 12 sessions
 
