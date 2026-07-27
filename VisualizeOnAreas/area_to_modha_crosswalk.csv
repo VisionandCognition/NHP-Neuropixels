@@ -1,0 +1,28 @@
+our_area,modha_node,match_type,modha_full_name,notes
+Anterior Pulvinar,Pul.o,leaf_exact,Nucleus pulvinaris oralis thalami,oralis = anterior pulvinar in classic 4-way pulvinar nomenclature
+Lateral Pulvinar,PL#3,leaf_exact,Nucleus pulvinaris lateralis thalami,
+BA29,29,leaf_exact,Area 29,
+CL-pc Thalamus,Cl#2,leaf_exact,Nucleus centralis lateralis thalami,FALSE FRIEND WARNING: not CL#4 (=caudal-lateral auditory belt cortex); CL#1 is also unrelated (merged into Claustrum)
+CM-pf Thalamus,CM#2,leaf_exact,nucleus centrum medianum (thalamus),
+central medial thalamus (CM),C#4,leaf_mechanical_aggregate,Nucleus centralis thalami,"distinct nucleus from CM-pf/CM#2 (centromedian) -- do not confuse; CeM#2 is merged into C#4's bracket list [Ce#2 CeM#2]. Found while joining pooled metrics 2026-07-27 (pooled label 'CM' vs 'CMN-PF')"
+MD Thalamus,MD,leaf_exact,Nucleus medialis dorsalis thalami,
+Medial Geniculate,MG,leaf_exact,Corpus geniculatum mediale,
+Suprageniculate,SG,leaf_exact,Nucleus suprageniculatus thalami,
+SC,MB#2,coarse_merged,Mid Brain,SC has no own vertex; explicitly listed inside MB#2's merged-region bracket list along with APT CG PPN VTA etc.
+PCC [BA23C],23,leaf_exact,Area 23,parent of leaf children 23a/23b if finer split ever needed
+PE [BA5],PEm,leaf_mechanical_aggregate,Rostral superior parietal lobule,our PE (area_5d) corresponds to Modha's PE#1/PE#2 which are merged into PEm
+PEa [BA5],MIP,leaf_mechanical_aggregate,Medial intraparietal area,PEa is merged into MIP's bracket list (5ip PEa PEip)
+Posterior Commisure (PCR),,gap_unplaced,,zero mentions in 57-page SI; only 2 rows / 0.9% of channels and low-confidence disjunctive labels; decided not worth placement effort (2026-07-27)
+S1 [BA1-2],1#1;2#1,leaf_split,Area 1; Area 2,two separate leaf nodes for BA1 and BA2
+S1 [BA1-3],1#1;2#1;3a;3b,leaf_split,Area 1; Area 2; Postcentral area 3a; Postcentral area 3b,combined BA1-2-3 range spans four leaf nodes
+S1 [BA3],3a;3b,leaf_split,Postcentral area 3a; Postcentral area 3b,
+SN,SN,leaf_exact,substantia nigra,
+ZI,Sub.Th,leaf_mechanical_aggregate,Nucleus subthalamic,ZI is merged into Sub.Th's bracket list [ZI Zic]; not its own vertex
+VIP,VIP,leaf_exact,Ventral intraparietal area,
+VPI Thalamus,VPI,leaf_exact,Nucleus ventralis posterior inferior thalami,
+Suprafascicular Nucleus,,gap_unplaced,,zero mentions in 57-page SI; only 1 row / 0.4% of channels; decided not worth placement effort (2026-07-27)
+VPM-VPL Thalamus,VPM;VPL,leaf_split,Nucleus ventralis posterior medialis thalami; Ventral posterior lateral nucleus (thalamus),
+mesencephalic reticular formation,,gap_unplaced,,zero explicit mention (not listed in MB#2's bracket list unlike SC); only 2 rows / 3.0% of channels and low-confidence disjunctive labels; decided not worth placement effort (2026-07-27)
+Caudate (tail),Cd t,leaf_exact,Nucleus caudatus; tail,child of parent Cd node
+VMP Thalamus,VN,leaf_mechanical_aggregate,Ventrolateral Nucleii of Thalamus,low priority: appears only as a blank-confidence disjunctive alt-guess in one row; VM#2 is merged into VN's bracket list [VM#2 VMH]
+Habenula,Tha,coarse_anchor,thalamus (coarse box, hierarchy_depth=2),"NO TRACER DATA AT ANY LEVEL for Hb (confirmed absent from entire SI, not even merged into a coarser node). Anchored to Tha's box position as nearest existing coarse parcel purely for visualization; NOT a real leaf-node match. 15 rows / 13.0% of channels, so this placement matters. Renderer MUST visually flag this box as coarse-anchored (e.g. hatching/different border), never render identically to genuine matches. Decision made 2026-07-27, user acknowledged as imperfect but accepted (no better option exists)."
