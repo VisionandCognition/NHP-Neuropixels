@@ -36,12 +36,15 @@ function [tokens, names] = extractAreaTokens(labelStr)
 %            so a missed capture here just means one fewer example of
 %            that token's full name, not a lost pooling membership).
 
+% Code charclass allows '/' and up to 15 chars (official CHARM/SARM codes such
+% as "area_3a/b", "area_46v/f", "rostral_vlPFC"; extended 2026-10-23, previously
+% '/' was rejected and codes > 12 chars were silently dropped).
 if isempty(labelStr)
     tokens = {};
     names = {};
     return
 end
-matches = regexp(labelStr, '\(([A-Za-z_][A-Za-z0-9_\-]{0,11})\)', 'tokens');
+matches = regexp(labelStr, '\(([A-Za-z_][A-Za-z0-9_\-/]{0,14})\)', 'tokens');
 tokens = cellfun(@(c) upper(c{1}), matches, 'UniformOutput', false);
 tokens = unique(tokens);
 
@@ -52,7 +55,7 @@ names = repmat({''}, size(tokens));
 % BACK ACROSS those field boundaries (e.g. "SC" (AssignedArea) + "SC"
 % (L6) + "superior colliculus (Co)" (L5) all in the same string
 % otherwise captures as "SC SC superior colliculus" for token CO).
-nameMatches = regexp(labelStr, '([A-Za-z][A-Za-z0-9_]*(?:[ _][A-Za-z0-9_]+){0,2})\s*\(([A-Za-z_][A-Za-z0-9_\-]{0,11})\)', 'tokens');
+nameMatches = regexp(labelStr, '([A-Za-z][A-Za-z0-9_]*(?:[ _][A-Za-z0-9_]+){0,2})\s*\(([A-Za-z_][A-Za-z0-9_\-/]{0,14})\)', 'tokens');
 for i = 1:numel(nameMatches)
     tok = upper(nameMatches{i}{2});
     nm = regexprep(nameMatches{i}{1}, '^(or|and)\s+', '', 'ignorecase');

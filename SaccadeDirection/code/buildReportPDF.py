@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Builds the full collaborator-facing PDF from PIPELINE_REPORT.md + all
-per-session figures in <saccadeDataDir()>/figures/, for all 12 sessions.
+per-session figures in <saccadeDataDir()>/figures/, for every extracted session.
 
 Pipeline: markdown (report + generated appendix) -> self-contained HTML
 (pandoc, images embedded as base64) -> PDF (headless Chrome print-to-pdf).
@@ -13,6 +13,7 @@ Default output: <saccadeDataDir()>/../PIPELINE_REPORT_<date>.pdf
 """
 import subprocess
 import sys
+import re
 import datetime
 import shutil
 import tempfile
@@ -24,9 +25,10 @@ FIGDIR = Path('/media/NETDISKS/VS03/VS03_6/Neuropixels_NHP/Data_analysis/Saccade
 DATADIR = FIGDIR.parent
 OUTDIR = DATADIR.parent  # .../SaccadeDirection/ on the server, sibling to data/ and info/
 
-DAYS = ['20260224','20260226','20260303','20260310','20260312','20260317',
-        '20260318','20260320','20260323','20260324','20260325','20260326']
-RUN_OVERRIDE = {'20260224': '001'}  # all others are run-003
+# (day, run) for every extracted session on disk, so newly added sessions
+# are picked up automatically
+SESSIONS = sorted(re.match(r'(\d{8})_run-(\d{3})_extracted\.mat', p.name).groups()
+                  for p in DATADIR.glob('*_run-*_extracted.mat'))
 
 FIG_ORDER = [
     ('overview', 'Overview: full-probe MUA heatmap, real-depth ruler, per-epoch significance map (visual/delay/peri/post, ms windows labeled), anatomy annotation'),
@@ -80,9 +82,8 @@ hr { border: none; border-top: 1px solid #ccc; margin: 2em 0; }
 
 def build_appendix() -> str:
     lines = ['## 9. Appendix: Per-Session Figures\n',
-             'All figures for all 12 sessions, in full. See sec 5.2 for a description of each figure type.\n']
-    for day in DAYS:
-        run = RUN_OVERRIDE.get(day, '003')
+             f'All figures for all {len(SESSIONS)} sessions, in full. See sec 5.2 for a description of each figure type.\n']
+    for day, run in SESSIONS:
         lines.append(f'### {day} (run-{run})\n')
         for suffix, caption in FIG_ORDER:
             fn = FIGDIR / suffix / f'{day}_run-{run}.png'
@@ -116,11 +117,19 @@ def main():
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
         report_text = REPORT_MD.read_text()
-        pooled_decode_fig = FIGDIR / 'pooled' / 'pooled_decode_population.png'
-        if pooled_decode_fig.exists():
-            report_text = report_text.replace(
-                '<!-- POOLED_DECODE_FIGURE -->',
-                f'<div class="figblock">\n\n![]({pooled_decode_fig})\n\n</div>')
+        # Generic figure-embedding marker: any "<!-- FIGURE: relative/path.png -->"
+        # in the report body gets replaced with the actual image, embedded
+        # right where it's discussed in the text -- used for cross-session
+        # summary figures (figures/pooled/*.png) that aren't part of the
+        # per-session appendix loop below. Scales to new figures without
+        # touching this script: just drop a marker in PIPELINE_REPORT.md.
+        def embed_figure(m):
+            rel_path = m.group(1).strip()
+            fig_path = FIGDIR / rel_path
+            if not fig_path.exists():
+                return f'*(missing figure: {rel_path})*'
+            return f'<div class="figblock">\n\n![]({fig_path})\n\n</div>'
+        report_text = re.sub(r'<!--\s*FIGURE:\s*(.+?)\s*-->', embed_figure, report_text)
 
         combined_md = tmp / 'combined.md'
         with open(combined_md, 'w') as f:

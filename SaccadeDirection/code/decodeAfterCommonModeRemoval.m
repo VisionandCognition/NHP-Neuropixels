@@ -31,7 +31,11 @@ opts = setDefault(opts, 'baseWindow', [-0.9 -0.6]);
 opts = setDefault(opts, 'visualWindow', [-0.5 -0.35]);
 opts = setDefault(opts, 'goCueWindows', struct('planning', [0 0.1], 'execution', [0.1 0.3]));
 
-kinematicLinkedDays = {'20260310','20260320','20260323','20260324'};
+% kinematic-linked sessions as determined by checkSharedComponentKinematics.m
+% (isKinematicSig), not hardcoded, so newly added sessions are picked up
+K = load(fullfile(saccadeDataDir(), 'shared_component_kinematics.mat'));
+kinField = fieldnames(K); kinCheck = K.(kinField{1});
+kinematicLinkedDays = {kinCheck([kinCheck.isKinematicSig]).Day};
 epochNames = {'visual','planning','execution'};
 results = struct([]);
 

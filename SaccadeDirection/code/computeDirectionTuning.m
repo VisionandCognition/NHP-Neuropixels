@@ -102,13 +102,17 @@ for s = 1:numel(sessions)
         tuning(rowIdx).pPerm = pPerm;
         tuning(rowIdx).pKW = pKW;
         tuning(rowIdx).tuned = pPerm < 0.05;
-        % category distinguishes a clean single-preferred-direction
-        % response ('directional', what pPerm alone tests) from a channel
-        % with real but non-unimodal direction structure ('complex' --
-        % e.g. bimodal/opposite-direction responses, which cancel out in
-        % the vector-sum test but show up in the omnibus Kruskal-Wallis
-        % test) from no direction effect at all ('untuned'). See
-        % classifyTuning.m header for the full reasoning.
+        % category crosses the vector-sum permutation test (pPerm) with the
+        % omnibus Kruskal-Wallis test (pKW) into four categories: a clean
+        % single-preferred-direction response ('directional', pPerm sig
+        % only), a dominant peak that ALSO has real secondary/non-unimodal
+        % structure ('directional_complex', both sig -- prefDir is usable
+        % but not a clean summary), real direction-dependent structure with
+        % no reliable single peak ('complex', pKW sig only), or no
+        % direction effect at all ('untuned', neither sig). See
+        % classifyTuning.m header for the full reasoning and why the
+        % 'directional_complex' split matters (most pPerm-significant
+        % channels turn out to have real secondary structure too).
         tuning(rowIdx).category = classifyTuning(pPerm, pKW);
     end
 
@@ -148,6 +152,7 @@ f = figure('Visible','off','Position',[0 0 2200 2000], 'Color', 'w');
 nCol = ceil(sqrt(nShow*1.3)); nRow = ceil(nShow/nCol);
 tl = tiledlayout(f, nRow, nCol, 'TileSpacing', 'none', 'Padding', 'compact');
 nDirectional = sum(strcmp({tuning(rows).category}, 'directional'));
+nDirectionalComplex = sum(strcmp({tuning(rows).category}, 'directional_complex'));
 nComplex = sum(strcmp({tuning(rows).category}, 'complex'));
 for i = 1:nShow
     r = rowsByDepth(i);
@@ -180,8 +185,8 @@ for i = 1:nShow
     title(ax, sprintf('%d', tuning(r).channel), 'FontSize', 6, 'FontWeight', 'normal');
 end
 title(tl, sprintf(['%s run-%03d: ALL responsive channels (n=%d) -- ' ...
-    'red = directional (n=%d), orange = complex/non-unimodal (n=%d), gray = untuned'], ...
-    S.Day, S.RunN, nShow, nDirectional, nComplex));
+    'red = directional/clean (n=%d), purple = directional+complex (n=%d), orange = complex/non-unimodal (n=%d), gray = untuned'], ...
+    S.Day, S.RunN, nShow, nDirectional, nDirectionalComplex, nComplex));
 forceLightTheme(f);
 saveas(f, figSavePath(opts.figDir, 'tuning_examples', S.Day, S.RunN));
 close(f);
@@ -225,7 +230,7 @@ if numel(rows) >= 2
     axT = nexttile(tl2, 9, [1 2]);
     image(axT, 1, 1:numel(allRows), reshape(catColor, [numel(allRows) 1 3]));
     set(axT, 'Color', 'w', 'XTick', []);
-    title(axT, {'category', '(red=dir,orange=cx)'}, 'FontSize', 7);
+    title(axT, {'category', '(red=dir,purple=dir+cx,', 'orange=cx)'}, 'FontSize', 7);
 
     forceLightTheme(f2);
     saveas(f2, figSavePath(opts.figDir, 'tuning_matrix', S.Day, S.RunN));

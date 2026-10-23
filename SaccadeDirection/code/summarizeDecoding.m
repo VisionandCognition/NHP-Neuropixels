@@ -81,8 +81,8 @@ set(ax, 'XScale', 'log', 'Color', 'w');
 xlabel(ax, 'Population size (# channels, log scale)'); ylabel(ax, 'Decode accuracy (%, mean +/- SEM across sessions)');
 ylim(ax, [0 60]);
 legend(ax, hs, epochNames, 'Location', 'northwest', 'TextColor', 'k', 'Color', 'w');
-title(ax, sprintf('Pooled across 12 sessions: direction decoding vs. population size\n(nearest-centroid, LOO-CV, chance=12.5%%; N sessions contributing per size: %s)', ...
-    strjoin(arrayfun(@(n) num2str(n), nSessAtSize, 'UniformOutput', false), ',')), 'FontSize', 9);
+title(ax, sprintf('Pooled across %d sessions: direction decoding vs. population size\n(nearest-centroid, LOO-CV, chance=12.5%%; N sessions contributing per size: %s)', ...
+    max(nSessAtSize), strjoin(arrayfun(@(n) num2str(n), nSessAtSize, 'UniformOutput', false), ',')), 'FontSize', 9);
 forceLightTheme(f);
 figDir = fullfile(saccadeDataDir(), 'figures');
 if ~isfolder(fullfile(figDir,'pooled')), mkdir(fullfile(figDir,'pooled')); end

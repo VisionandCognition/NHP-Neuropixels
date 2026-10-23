@@ -302,13 +302,17 @@ title(ax1, sprintf('%d/%d visual, %d/%d planning, %d/%d execution', ...
 
 % Panel 2: tuning strength, visual vs execution (does retinotopic/visual
 % tuning predict eventual motor tuning?) -- colored by category
-% (classifyTuning.m: red=directional, orange=complex, gray=untuned)
+% (classifyTuning.m: red=directional, purple=directional+complex, orange=complex, gray=untuned)
 ax2 = nexttile(tl); hold(ax2, 'on');
 Rvis = [r.tuningVisual.resultantLen]; Rexec = [r.tuningExec.resultantLen];
 [catVis, colVis] = classifyTuning([r.tuningVisual.pPerm], [r.tuningVisual.pKW]);
 [catExec, colExec] = classifyTuning([r.tuningExec.pPerm], [r.tuningExec.pKW]);
-isDirVis = strcmp(catVis, 'directional');
-isDirExec = strcmp(catExec, 'directional');
+% 'directional' + 'directional_complex' together == the old single
+% 'directional' category (classifyTuning.m 2026-07-14 split) -- use
+% ismember, not strcmp, wherever old "has some real preferred direction"
+% membership needs to be preserved.
+isDirVis = ismember(catVis, {'directional','directional_complex'});
+isDirExec = ismember(catExec, {'directional','directional_complex'});
 useCol2 = colExec; useCol2(isDirVis & ~isDirExec, :) = colVis(isDirVis & ~isDirExec, :);
 scatter(ax2, Rvis, Rexec, 14, useCol2, 'filled');
 xlim(ax2, [0 1]); ylim(ax2, [0 1]);
@@ -321,7 +325,7 @@ title(ax2, 'Tuning strength: visual vs execution');
 ax3 = nexttile(tl); hold(ax3, 'on');
 Rplan = [r.tuningPlan.resultantLen];
 [catPlan, colPlan] = classifyTuning([r.tuningPlan.pPerm], [r.tuningPlan.pKW]);
-isDirPlan = strcmp(catPlan, 'directional');
+isDirPlan = ismember(catPlan, {'directional','directional_complex'});
 useCol3 = colExec; useCol3(isDirPlan & ~isDirExec, :) = colPlan(isDirPlan & ~isDirExec, :);
 scatter(ax3, Rplan, Rexec, 14, useCol3, 'filled');
 xlim(ax3, [0 1]); ylim(ax3, [0 1]);

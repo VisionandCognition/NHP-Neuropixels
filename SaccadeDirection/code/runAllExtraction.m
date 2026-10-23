@@ -3,16 +3,29 @@
 % under saccadeDataDir() (on the server, not the local repo). Sessions where no OpenEphys recording
 % covers the behavioral run (clock mismatch / recording not yet started)
 % are skipped and logged.
+%
+% Set skipExisting = true in the workspace before calling to only extract
+% runs that don't have an *_extracted.mat yet (e.g. after new recordings
+% were added); default false re-extracts everything.
 
 fld.script = '/media/DOCUMENTS/DOCUMENTS/EPHYS_ANALYSIS/NHP-Neuropixels';
 addpath(genpath(fullfile(fld.script,'OpenEphys')));
 addpath(fullfile(fld.script,'SaccadeDirection','code'));
 
 runs = findSaccadeRuns();
+if ~exist('skipExisting','var'), skipExisting = false; end
 
 results = struct('Day',{},'RunN',{},'status',{},'message',{});
 for i = 1:numel(runs)
     r = runs(i);
+    outFile = fullfile(saccadeDataDir(), sprintf('%s_run-%03d_extracted.mat', r.Day, r.RunN));
+    if skipExisting && isfile(outFile)
+        results(i).Day = r.Day;
+        results(i).RunN = r.RunN;
+        results(i).status = 'ok';
+        results(i).message = 'already extracted (skipped)';
+        continue
+    end
     try
         tic;
         S = extractSaccadeSession(r, struct('save', true));

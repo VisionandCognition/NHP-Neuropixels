@@ -69,6 +69,7 @@ runStartT = niT0forWindow + seconds(runDT - rec.RecordingStartDT);
 logEventT1 = arrayfun(@(e) e.t(1), Log.events);
 runWindow = [runStartT - 20, runStartT + max(logEventT1) + 30];
 inWindow = ttl.timestamps >= runWindow(1) & ttl.timestamps <= runWindow(2);
+ttlFull = ttl; % kept for the fallback below
 ttl.lines = ttl.lines(inWindow);
 ttl.sampleNumbers = ttl.sampleNumbers(inWindow);
 ttl.timestamps = ttl.timestamps(inWindow);
@@ -85,6 +86,22 @@ end
 fprintf('  Log event types: %s\n', strjoin(cellfun(@(t) sprintf('%s=%d',t,eventTypeCounts(t)), uTypes, 'uni', 0), ', '));
 
 lineMap = matchTTLtoLogEvents(ttl.lines, eventTypeCounts);
+
+% The run window above is estimated from the stimulus PC's run-folder
+% timestamp vs. OE's recording start, so a clock offset between the two
+% machines can shift it enough to clip trials at one end (seen on
+% 20260819: window ~35s early, last trials cut off). Every run has its own
+% dedicated recording in this dataset, so if the window fails to match
+% but the FULL recording's TTL counts do, use the full recording instead.
+if ~isKey(lineMap, 'trial_start') || ~isKey(lineMap, 'targ_start')
+    lineMapFull = matchTTLtoLogEvents(ttlFull.lines, eventTypeCounts, false);
+    if isKey(lineMapFull, 'trial_start') && isKey(lineMapFull, 'targ_start')
+        fprintf('  run window failed to match trial_start/targ_start counts; full recording matches -- using all %d TTL events\n', ...
+            numel(ttlFull.lines));
+        ttl = ttlFull;
+        lineMap = matchTTLtoLogEvents(ttl.lines, eventTypeCounts);
+    end
+end
 
 % targ_start's count sometimes ties with correct/reward_start/reward_stop
 % (all logged the same number of times when every trial that reaches the

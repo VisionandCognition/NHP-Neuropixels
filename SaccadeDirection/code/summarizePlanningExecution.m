@@ -1,4 +1,4 @@
-function summary = summarizePlanningExecution(mode)
+function summary = summarizePlanningExecution(mode, excludeDays)
 % SUMMARIZEPLANNINGEXECUTION Quantifies the planning-vs-execution split
 % (analyzePlanningExecution.m) across ALL 12 sessions, rather than the
 % single-session "first look" in PIPELINE_REPORT.md sec 4.8. For each
@@ -15,8 +15,14 @@ function summary = summarizePlanningExecution(mode)
 % summary = summarizePlanningExecution(mode)
 %   mode : 'gocue' or 'saclocked' (default 'saclocked', the
 %          methodologically correct anchoring -- see PIPELINE_REPORT sec 4.8)
+%   excludeDays : cellstr of sessions left out of the POOLED totals (still
+%          listed per-session). Default: the four sessions with near-zero
+%          directional channels in either window (20260224, 20260326,
+%          20260910, 20260916 -- <=3 directional channels per window,
+%          same convention as poolPlanExecByArea.m).
 
 if nargin < 1 || isempty(mode), mode = 'saclocked'; end
+if nargin < 2, excludeDays = {'20260224','20260326','20260910','20260916'}; end
 
 load(fullfile(saccadeDataDir(), 'planning_execution_results.mat'), 'results');
 allModes = cellfun(@(x) x.mode, {results.data}, 'UniformOutput', false);
@@ -33,8 +39,11 @@ for i = 1:numel(rows)
     % same as the plotting functions do.
     catP = classifyTuning([r.tuningPlan.pPerm], [r.tuningPlan.pKW]);
     catE = classifyTuning([r.tuningExec.pPerm], [r.tuningExec.pKW]);
-    isDirPlan = strcmp(catP, 'directional');
-    isDirExec = strcmp(catE, 'directional');
+    % 'directional'+'directional_complex' == old single 'directional'
+    % category (classifyTuning.m 2026-07-14 split) -- ismember preserves
+    % the original "has some real preferred direction" membership.
+    isDirPlan = ismember(catP, {'directional','directional_complex'});
+    isDirExec = ismember(catE, {'directional','directional_complex'});
 
     both = isDirPlan & isDirExec;
     execOnly = isDirExec & ~isDirPlan;
@@ -62,17 +71,18 @@ for i = 1:numel(rows)
         sum(both), sum(execOnly), sum(planOnly), angDiff);
 end
 
-totalExecOnly = sum([summary.nExecOnly]);
-totalPlanOnly = sum([summary.nPlanOnly]);
-totalBoth = sum([summary.nBothDirectional]);
-totalExecDir = sum([summary.nExecDirectional]);
-totalPlanDir = sum([summary.nPlanDirectional]);
-fprintf('\n=== Pooled across 12 sessions (%s mode) ===\n', mode);
+inPool = ~ismember({summary.Day}, excludeDays);
+totalExecOnly = sum([summary(inPool).nExecOnly]);
+totalPlanOnly = sum([summary(inPool).nPlanOnly]);
+totalBoth = sum([summary(inPool).nBothDirectional]);
+totalExecDir = sum([summary(inPool).nExecDirectional]);
+totalPlanDir = sum([summary(inPool).nPlanDirectional]);
+fprintf('\n=== Pooled across %d sessions (%s mode; excluded: %s) ===\n', sum(inPool), mode, strjoin(excludeDays, ' '));
 fprintf('directional in execution: %d, of which also directional in planning: %d (%.0f%%), execution-only: %d (%.0f%%)\n', ...
     totalExecDir, totalBoth, 100*totalBoth/max(totalExecDir,1), totalExecOnly, 100*totalExecOnly/max(totalExecDir,1));
 fprintf('directional in planning: %d, planning-only (not execution): %d (%.0f%%)\n', ...
     totalPlanDir, totalPlanOnly, 100*totalPlanOnly/max(totalPlanDir,1));
-validAng = [summary.meanAngDiffBoth]; validAng = validAng(~isnan(validAng));
+validAng = [summary(inPool).meanAngDiffBoth]; validAng = validAng(~isnan(validAng));
 fprintf('mean angular difference (planning vs execution preferred direction, channels tuned in both), pooled: %.1f deg (n=%d sessions with >=1 such channel)\n', ...
     mean(validAng), numel(validAng));
 end

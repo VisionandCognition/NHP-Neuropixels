@@ -6,12 +6,20 @@ function poolResults = poolTuningByArea(sessions, screening, opts)
 % depth"), now possible because channels carry an actual area label
 % rather than just an opaque depth index.
 %
-% LIBERAL POOLING: many hand-assigned labels genuinely span multiple
-% candidate areas (e.g. "Posterior Commisure (or Habenula or CM?)"), so a
-% channel counts toward EVERY area token found in ANY of its label
-% fields (AssignedArea, L6, L5, L4, L3), not just its single primary
+% LIBERAL POOLING, WITHIN ONE HIERARCHY LEVEL ONLY: many hand-assigned
+% labels genuinely span multiple candidate areas AT THE SAME level of
+% specificity (e.g. "Posterior Commisure (or Habenula or CM?)"), so a
+% channel counts toward EVERY area token found in its opts.labelField
 % label -- see extractAreaTokens.m. This means a channel can appear in
-% more than one area's pool; that is intentional, not a bug.
+% more than one area's pool at a given level; that is intentional, not a
+% bug. Earlier versions of this function concatenated AssignedArea + L6 +
+% L5 + L4 + L3 together before extracting tokens, which conflated this
+% genuine within-level uncertainty with cross-level hierarchy (e.g. "SC"
+% at the fine level and "colliculi (Co)" at a coarser level are the SAME
+% channels, not two candidate identities) -- that produced confusing
+% near-duplicate "areas" in the pooled output (SC and CO reporting
+% identical counts). Fixed: operates on exactly ONE labelField at a time;
+% run this once per level you want to compare (e.g. L6=finest, L3=coarsest).
 %
 % For each area token found anywhere in the dataset (except
 % opts.excludeTokens -- a couple of tokens that turned out to be
@@ -28,6 +36,9 @@ function poolResults = poolTuningByArea(sessions, screening, opts)
 % poolResults = poolTuningByArea(sessions, screening, opts)
 %   sessions, screening : as elsewhere (sessions must come from
 %     loadAllSessions.m so S.channelArea is populated)
+%   opts.labelField    : which S.channelArea field to pool by -- 'L6'
+%                        (finest), 'L5', 'L4', or 'L3' (coarsest);
+%                        'AssignedArea' also valid (default 'L6')
 %   opts.excludeTokens : cellstr of tokens to drop (default {'DEEP','HIGH'})
 %   opts.minChannels   : only report/plot areas with at least this many
 %                        pooled channels (default 20)
@@ -37,6 +48,7 @@ function poolResults = poolTuningByArea(sessions, screening, opts)
 %   opts.figDir        : default <saccadeDataDir()>/figures
 
 if nargin < 3, opts = struct(); end
+opts = setDefault(opts, 'labelField', 'L6');
 opts = setDefault(opts, 'excludeTokens', {'DEEP','HIGH'});
 opts = setDefault(opts, 'minChannels', 20);
 opts = setDefault(opts, 'minDirForRose', 15);
@@ -62,9 +74,7 @@ for s = 1:numel(sessions)
     for r = tRows, tByChan(tuning(r).channel) = tuning(r); end %#ok<NASGU>
 
     for c = 1:nChan
-        combined = strjoin({S.channelArea.AssignedArea{c}, S.channelArea.L6{c}, ...
-            S.channelArea.L5{c}, S.channelArea.L4{c}, S.channelArea.L3{c}}, ' ');
-        [rawToks, rawNames] = extractAreaTokens(combined);
+        [rawToks, rawNames] = extractAreaTokens(S.channelArea.(opts.labelField){c});
         keep = ~ismember(rawToks, opts.excludeTokens);
         toks = rawToks(keep);
         if isempty(toks), continue; end % no area info for this channel at all -- excluded from every pool
@@ -105,7 +115,17 @@ for a = 1:numel(allTokens)
     if isempty(idx), continue; end
 
     cats = {rows(idx).Category};
-    isDir = strcmp(cats, 'directional');
+    % 'directional' + 'directional_complex' together == the old single
+    % 'directional' category (classifyTuning.m 2026-07-14 split) -- PctDirectional/
+    % NDirectional below preserve that original union so existing headline
+    % numbers don't silently change; PctDirectionalClean/PctDirectionalComplex
+    % break the union down into "clean single peak" vs "dominant peak + real
+    % secondary structure" (see classifyTuning.m header for why this split
+    % exists -- most 'directional' channels turn out to have real secondary
+    % structure, so prefDir is not equally trustworthy across the whole pool).
+    isDirClean = strcmp(cats, 'directional');
+    isDirCx = strcmp(cats, 'directional_complex');
+    isDir = isDirClean | isDirCx;
     isCx = strcmp(cats, 'complex');
     isResp = ~strcmp(cats, 'not_responsive');
     lens = [rows(idx).ResultantLen];
@@ -125,6 +145,8 @@ for a = 1:numel(allTokens)
     poolResults(r).NChannels = numel(idx);
     poolResults(r).PctResponsive = 100*mean(isResp);
     poolResults(r).PctDirectional = 100*mean(isDir);
+    poolResults(r).PctDirectionalClean = 100*mean(isDirClean);
+    poolResults(r).PctDirectionalComplex = 100*mean(isDirCx);
     poolResults(r).PctComplex = 100*mean(isCx);
     poolResults(r).NDirectional = sum(isDir);
     poolResults(r).DominantPrefDir = domPrefDir;
@@ -136,14 +158,15 @@ end
 [~, order] = sort([poolResults.NChannels], 'descend');
 poolResults = poolResults(order);
 
-fprintf('%-10s %-32s %7s %8s %8s %8s %11s %7s %7s\n', 'Area', 'FullName', 'NChan', '%Resp', '%Dir', '%Cx', 'domPrefDir', 'conc', 'nDir');
+fprintf('=== pooled by %s ===\n', opts.labelField);
+fprintf('%-10s %-32s %7s %8s %8s %9s %8s %11s %7s %7s\n', 'Area', 'FullName', 'NChan', '%Resp', '%Dir', '%DirClean', '%Cx', 'domPrefDir', 'conc', 'nDir');
 for a = 1:numel(poolResults)
     p = poolResults(a);
-    fprintf('%-10s %-32s %7d %7.1f%% %7.1f%% %7.1f%% %10.0fdeg %7.2f %7d\n', ...
-        p.Area, p.FullName, p.NChannels, p.PctResponsive, p.PctDirectional, p.PctComplex, p.DominantPrefDir, p.Concentration, p.NDirectional);
+    fprintf('%-10s %-32s %7d %7.1f%% %7.1f%% %8.1f%% %7.1f%% %10.0fdeg %7.2f %7d\n', ...
+        p.Area, p.FullName, p.NChannels, p.PctResponsive, p.PctDirectional, p.PctDirectionalClean, p.PctComplex, p.DominantPrefDir, p.Concentration, p.NDirectional);
 end
 
-outFile = fullfile(saccadeDataDir(), 'tuning_pooled_by_area.mat');
+outFile = fullfile(saccadeDataDir(), sprintf('tuning_pooled_by_area_%s.mat', opts.labelField));
 save(outFile, 'poolResults');
 fprintf('saved %s\n', outFile);
 
@@ -175,9 +198,10 @@ end
 text(ax, 0, 1, strjoin(lines, newline), 'Units', 'normalized', 'VerticalAlignment', 'top', ...
     'FontName', 'FixedWidth', 'FontSize', 9, 'Interpreter', 'none', 'Color', 'k');
 forceLightTheme(f);
-saveas(f, fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_legend.png'));
+outFile = fullfile(opts.figDir, 'pooled', sprintf('pooled_tuning_by_area_legend_%s.png', opts.labelField));
+saveas(f, outFile);
 close(f);
-fprintf('saved %s\n', fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_legend.png'));
+fprintf('saved %s\n', outFile);
 end
 
 % ------------------------------------------------------------------
@@ -208,19 +232,21 @@ nArea = numel(show);
 f = figure('Visible','off','Position',[0 0 max(700, 60*nArea) 500], 'Color', 'w');
 ax = axes(f); hold(ax, 'on');
 x = 1:nArea;
-bar(ax, x-0.25, [show.PctResponsive], 0.25, 'FaceColor', [0.5 0.5 0.5]);
-bar(ax, x, [show.PctDirectional], 0.25, 'FaceColor', [0.75 0.1 0.1]);
-bar(ax, x+0.25, [show.PctComplex], 0.25, 'FaceColor', [0.85 0.55 0.1]);
+hBar = gobjects(1,3);
+hBar(1) = bar(ax, x-0.25, [show.PctResponsive], 0.25, 'FaceColor', [0.5 0.5 0.5]);
+hBar(2) = bar(ax, x, [show.PctDirectional], 0.25, 'FaceColor', [0.75 0.1 0.1]);
+hBar(3) = bar(ax, x+0.25, [show.PctComplex], 0.25, 'FaceColor', [0.85 0.55 0.1]);
 xLabels = arrayfun(@(p) sprintf('%s (n=%d)', p.Area, p.NChannels), show, 'UniformOutput', false);
 set(ax, 'XTick', x, 'XTickLabel', xLabels, 'XTickLabelRotation', 45, 'Color', 'w', 'TickLabelInterpreter', 'none');
 ylabel(ax, '%');
-legend(ax, {'% responsive', '% directional', '% complex'}, 'Location', 'northeast', 'TextColor', 'k', 'Color', 'w');
-title(ax, sprintf('Pooled by area across all sessions (liberal pooling, min %d channels/area, chan can count toward multiple areas)', opts.minChannels), 'FontSize', 9);
+legend(ax, hBar, {'% responsive', '% directional', '% complex'}, 'Location', 'northeast', 'TextColor', 'k', 'Color', 'w');
+title(ax, sprintf('Pooled by area across all sessions (pooled by %s, liberal within-level pooling, min %d channels/area)', opts.labelField, opts.minChannels), 'FontSize', 9, 'Interpreter', 'none');
 forceLightTheme(f);
 if ~isfolder(fullfile(opts.figDir,'pooled')), mkdir(fullfile(opts.figDir,'pooled')); end
-saveas(f, fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_summary.png'));
+outFile = fullfile(opts.figDir, 'pooled', sprintf('pooled_tuning_by_area_summary_%s.png', opts.labelField));
+saveas(f, outFile);
 close(f);
-fprintf('saved %s\n', fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_summary.png'));
+fprintf('saved %s\n', outFile);
 
 plotAreaLegend(show, opts);
 
@@ -258,11 +284,12 @@ for a = 1:nRose
     polarplot(ax, deg2rad([p.DominantPrefDir p.DominantPrefDir]), [0 p.Concentration*maxCount], 'r:', 'LineWidth', 1.5);
     title(ax, sprintf('%s (n=%d, %d dir)', p.Area, p.NChannels, p.NDirectional), 'FontSize', 8, 'Interpreter', 'none');
 end
-st = sgtitle(f2, {'Preferred-direction DISTRIBUTION by area (8 bins, not a single value) -- red dotted line = resultant vector mean, for reference only', ...
+st = sgtitle(f2, {sprintf('Preferred-direction DISTRIBUTION by area, pooled by %s (8 bins, not a single value) -- red dotted line = resultant vector mean, for reference only', opts.labelField), ...
     'Distribution shape reflects which part of each area a penetration happened to sample, not necessarily an intrinsic property of the area (see PIPELINE REPORT sec 6.7)'}, 'FontSize', 9, 'Interpreter', 'none');
 st.Color = 'k'; % forceLightTheme's generic text sweep doesn't reliably reach sgtitle's internal text object
 forceLightTheme(f2);
-saveas(f2, fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_rose.png'));
+outFile = fullfile(opts.figDir, 'pooled', sprintf('pooled_tuning_by_area_rose_%s.png', opts.labelField));
+saveas(f2, outFile);
 close(f2);
-fprintf('saved %s\n', fullfile(opts.figDir, 'pooled', 'pooled_tuning_by_area_rose.png'));
+fprintf('saved %s\n', outFile);
 end

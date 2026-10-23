@@ -54,14 +54,42 @@ function generateAnatomyTemplate(sessions, screening, opts)
 %   opts.minDirCountInBin   : min directional channels in a bin before its
 %                             preferred-direction estimate is trusted at
 %                             all (default 3)
+%   opts.chamber            : if given (e.g. 3), only sessions whose
+%                             sessionAnatomyInfo(day).chamber matches are
+%                             processed, output goes to
+%                             <repo root>/anatomy/chamber<N>/ (unless
+%                             opts.outDir is set), and the cluster CSV also
+%                             gets blank L6/L5/L4/L3 columns (same layout as
+%                             anatomy_template_clusters_hierarchical.csv, so
+%                             the chamber files can be merged later). A
+%                             'Chamber' column is added to both CSVs.
 %   opts.outDir             : default <SaccadeDirection repo root>/anatomy
+%                             (or .../anatomy/chamber<N> if opts.chamber set)
+%   opts.overwrite          : default false. The function REFUSES to write
+%                             over an existing output file unless true --
+%                             the chamber-2 files in anatomy/ are
+%                             hand-edited (AssignedArea, L6-L3) and must
+%                             never be regenerated over.
 
 if nargin < 3, opts = struct(); end
 opts = setDefault(opts, 'binSize', 20);
 opts = setDefault(opts, 'respMergeThresh', 0.15);
 opts = setDefault(opts, 'dirMergeThreshDeg', 30);
 opts = setDefault(opts, 'minDirCountInBin', 3);
-opts = setDefault(opts, 'outDir', fullfile(fileparts(fileparts(mfilename('fullpath'))), 'anatomy'));
+opts = setDefault(opts, 'chamber', []);
+opts = setDefault(opts, 'overwrite', false);
+anatRoot = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'anatomy');
+if isempty(opts.chamber)
+    opts = setDefault(opts, 'outDir', anatRoot);
+else
+    opts = setDefault(opts, 'outDir', fullfile(anatRoot, sprintf('chamber%d', opts.chamber)));
+end
+clusterFile = fullfile(opts.outDir, 'anatomy_template_clusters.csv');
+channelFile = fullfile(opts.outDir, 'anatomy_template_channels.csv');
+if ~opts.overwrite && (isfile(clusterFile) || isfile(channelFile))
+    error('generateAnatomyTemplate:wouldOverwrite', ...
+        'Refusing to overwrite existing template in %s (hand-edited files). Pass opts.overwrite=true or a different opts.outDir.', opts.outDir);
+end
 if ~isfolder(opts.outDir), mkdir(opts.outDir); end
 
 load(fullfile(saccadeDataDir(), 'tuning_results.mat'), 'tuning');
@@ -74,6 +102,9 @@ for s = 1:numel(sessions)
     sc = screening(s);
     assert(strcmp(S.Day, sc.Day) && S.RunN == sc.RunN, 'session/screening mismatch');
     anat = sessionAnatomyInfo(S.Day);
+    if ~isempty(opts.chamber) && ~isequal(anat.chamber, opts.chamber)
+        continue
+    end
     nChan = numel(sc.responsive);
 
     tRows = find(strcmp({tuning.Day}, S.Day) & [tuning.RunN] == S.RunN);
@@ -93,7 +124,7 @@ for s = 1:numel(sessions)
             tr = tByChan(c);
             category{c} = tr.category;
             resultantLen(c) = tr.resultantLen;
-            if strcmp(tr.category, 'directional')
+            if ismember(tr.category, {'directional','directional_complex'})
                 prefDir(c) = tr.prefDir;
             end
         elseif responsive(c)
@@ -105,7 +136,7 @@ for s = 1:numel(sessions)
 
     % --- per-channel reference rows
     for c = 1:nChan
-        channelRows(end+1,:) = {S.Day, S.RunN, c, depthMm(c), responsive(c), category{c}, ...
+        channelRows(end+1,:) = {S.Day, S.RunN, anat.chamber, c, depthMm(c), responsive(c), category{c}, ...
             prefDir(c), resultantLen(c)}; %#ok<AGROW>
     end
 
@@ -116,9 +147,9 @@ for s = 1:numel(sessions)
     for k = 1:numel(boundaries)-1
         idx = boundaries(k):(boundaries(k+1)-1);
         pctResp = 100*mean(responsive(idx));
-        pctDir = 100*mean(strcmp(category(idx), 'directional'));
+        pctDir = 100*mean(ismember(category(idx), {'directional','directional_complex'}));
         pctCx = 100*mean(strcmp(category(idx), 'complex'));
-        isDir = strcmp(category(idx), 'directional');
+        isDir = ismember(category(idx), {'directional','directional_complex'});
         if any(isDir)
             w = resultantLen(idx(isDir));
             pd = prefDir(idx(isDir));
@@ -133,7 +164,7 @@ for s = 1:numel(sessions)
         depthRange = depthRange(~isnan(depthRange));
         if isempty(depthRange), dLo = nan; dHi = nan; else, dLo = min(depthRange); dHi = max(depthRange); end
 
-        clusterRows(end+1,:) = {S.Day, S.RunN, anat.burrHole, anat.channelSelection, k, ...
+        clusterRows(end+1,:) = {S.Day, S.RunN, anat.chamber, anat.burrHole, anat.channelSelection, k, ...
             idx(1), idx(end), dLo, dHi, numel(idx), pctResp, pctDir, pctCx, ...
             domPrefDir, concentration, meanStrength, structStr, '', '', ''}; %#ok<AGROW>
     end
@@ -142,15 +173,18 @@ for s = 1:numel(sessions)
 end
 
 clusterT = cell2table(clusterRows, 'VariableNames', ...
-    {'Day','RunN','BurrHole','ChannelSelection','ClusterID','ChanIdxStart','ChanIdxEnd', ...
+    {'Day','RunN','Chamber','BurrHole','ChannelSelection','ClusterID','ChanIdxStart','ChanIdxEnd', ...
      'DepthMM_start','DepthMM_end','NChan','PctResponsive','PctDirectional','PctComplex', ...
      'DominantPrefDir_deg','PrefDirConcentration_0to1','MeanTuningStrength', ...
      'PlannedStructures_superficialToDeep','AssignedArea','Confidence','Notes'});
 channelT = cell2table(channelRows, 'VariableNames', ...
-    {'Day','RunN','ChannelIdx','DepthMM','Responsive','Category','PrefDir_deg','TuningStrength'});
+    {'Day','RunN','Chamber','ChannelIdx','DepthMM','Responsive','Category','PrefDir_deg','TuningStrength'});
 
-clusterFile = fullfile(opts.outDir, 'anatomy_template_clusters.csv');
-channelFile = fullfile(opts.outDir, 'anatomy_template_channels.csv');
+if ~isempty(opts.chamber)
+    for lv = {'L6','L5','L4','L3'}
+        clusterT.(lv{1}) = repmat({''}, height(clusterT), 1);
+    end
+end
 writetable(clusterT, clusterFile);
 writetable(channelT, channelFile);
 fprintf('\nsaved %s (%d rows -- the document to fill out)\n', clusterFile, height(clusterT));

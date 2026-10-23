@@ -24,11 +24,23 @@ function areaResults = decodeByArea(sessions, screening, opts)
 % averaged) if it has more, or uses all available (no subsampling needed)
 % if it has fewer.
 %
+% Pools by exactly ONE hierarchy level at a time (opts.labelField), not a
+% concatenation of AssignedArea+L6+L5+L4+L3 -- an earlier version
+% concatenated all label fields together before extracting tokens, which
+% conflated genuine within-level uncertainty ("or X or Y") with cross-
+% level hierarchy (e.g. "SC" at the fine level and "colliculi (Co)" at a
+% coarser level are the SAME channels, not two candidate areas), giving
+% confusing near-duplicate "areas" with identical counts. Run once per
+% level you want to compare (e.g. L6=finest, L3=coarsest).
+%
 % areaResults = decodeByArea(sessions, screening, opts)
 %   sessions, screening : as in decodeDirection.m (sessions must come
 %     from loadAllSessions() so S.channelArea is populated)
 %   opts.baseWindow, opts.visualWindow, opts.goCueWindows : same defaults
 %     as decodeDirection.m, so epochs match exactly
+%   opts.labelField            : which S.channelArea field to pool by --
+%                               'L6' (finest) through 'L3' (coarsest), or
+%                               'AssignedArea' (default 'L6')
 %   opts.excludeTokens        : cellstr, non-area qualifier tokens to
 %                               drop (default {'DEEP','HIGH'}, same as
 %                               poolTuningByArea.m)
@@ -47,6 +59,7 @@ if nargin < 3, opts = struct(); end
 opts = setDefault(opts, 'baseWindow', [-0.9 -0.6]);
 opts = setDefault(opts, 'visualWindow', [-0.5 -0.35]);
 opts = setDefault(opts, 'goCueWindows', struct('planning', [0 0.1], 'execution', [0.1 0.3]));
+opts = setDefault(opts, 'labelField', 'L6');
 opts = setDefault(opts, 'excludeTokens', {'DEEP','HIGH'});
 opts = setDefault(opts, 'minChannelsPerSession', 15);
 opts = setDefault(opts, 'minSessions', 2);
@@ -78,9 +91,7 @@ for s = 1:numel(sessions)
     nChan = numel(screening(s).responsive);
     chanTokens = cell(nChan,1);
     for c = respChans'
-        combined = strjoin({S.channelArea.AssignedArea{c}, S.channelArea.L6{c}, ...
-            S.channelArea.L5{c}, S.channelArea.L4{c}, S.channelArea.L3{c}}, ' ');
-        chanTokens{c} = setdiff(extractAreaTokens(combined), opts.excludeTokens);
+        chanTokens{c} = setdiff(extractAreaTokens(S.channelArea.(opts.labelField){c}), opts.excludeTokens);
     end
 
     sessData(s).Day = S.Day; %#ok<AGROW>
@@ -140,7 +151,7 @@ end
 [~, order] = sort([areaResults.NSessions], 'descend');
 areaResults = areaResults(order);
 
-outFile = fullfile(saccadeDataDir(), 'decode_by_area.mat');
+outFile = fullfile(saccadeDataDir(), sprintf('decode_by_area_%s.mat', opts.labelField));
 save(outFile, 'areaResults');
 fprintf('saved %s\n', outFile);
 
@@ -224,10 +235,11 @@ ylabel(ax, 'Decode accuracy (%)');
 % since each loop iteration creates both) -- explicit handles needed so
 % the legend entries actually match the bar colors.
 legend(ax, hBar, epochNames, 'Location', 'northeast', 'TextColor', 'k', 'Color', 'w');
-title(ax, sprintf('Direction decoding by area (population size-matched at %d channels, chance=12.5%%)', opts.capSize), 'FontSize', 9, 'Interpreter', 'none');
+title(ax, sprintf('Direction decoding by area, pooled by %s (population size-matched at %d channels, chance=12.5%%)', opts.labelField, opts.capSize), 'FontSize', 9, 'Interpreter', 'none');
 forceLightTheme(f);
 if ~isfolder(fullfile(opts.figDir,'pooled')), mkdir(fullfile(opts.figDir,'pooled')); end
-saveas(f, fullfile(opts.figDir, 'pooled', 'decode_by_area.png'));
+outFile = fullfile(opts.figDir, 'pooled', sprintf('decode_by_area_%s.png', opts.labelField));
+saveas(f, outFile);
 close(f);
-fprintf('saved %s\n', fullfile(opts.figDir, 'pooled', 'decode_by_area.png'));
+fprintf('saved %s\n', outFile);
 end

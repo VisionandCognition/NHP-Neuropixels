@@ -2,7 +2,9 @@ function anat = getChannelArea(day, runN, channelIdx, chDepthUm)
 % GETCHANNELAREA Looks up the tentative anatomical area for one or more
 % channels of a given session, from the hand-filled
 % anatomy/anatomy_template_channels.csv (see generateAnatomyTemplate.m
-% for how that file was built, and PIPELINE_REPORT.md sec 4.12).
+% for how that file was built, and PIPELINE_REPORT.md sec 4.12), plus any
+% anatomy/chamber<N>/anatomy_template_channels.csv (later chambers, same
+% label columns; stacked automatically).
 %
 % These are TENTATIVE, hand-assigned labels compared against an atlas by
 % eye (per-cluster, then propagated to every channel in that cluster) --
@@ -47,9 +49,21 @@ function anat = getChannelArea(day, runN, channelIdx, chDepthUm)
 
 persistent T
 if isempty(T)
-    anatFile = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'anatomy', 'anatomy_template_channels.csv');
-    T = readtable(anatFile, 'TextType', 'string');
-    T.Day = string(T.Day); % readtable may infer Day as numeric (all-digit strings) -- force string so lookups are robust regardless
+    % Chamber-2 file (original, hand-edited) plus any per-chamber files in
+    % anatomy/chamber<N>/ -- same label columns, so just stack them. Only
+    % the columns used below are kept (chamber files carry extra ones).
+    anatDir = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'anatomy');
+    anatFiles = {fullfile(anatDir, 'anatomy_template_channels.csv')};
+    sub = dir(fullfile(anatDir, 'chamber*', 'anatomy_template_channels.csv'));
+    for i = 1:numel(sub), anatFiles{end+1} = fullfile(sub(i).folder, sub(i).name); end %#ok<AGROW>
+    keep = {'Day','RunN','ChannelIdx','ClusterID','AssignedArea','L6','L5','L4','L3'};
+    parts = cell(size(anatFiles));
+    for i = 1:numel(anatFiles)
+        Ti = readtable(anatFiles{i}, 'TextType', 'string');
+        Ti.Day = string(Ti.Day); % readtable may infer Day as numeric (all-digit strings) -- force string so lookups are robust regardless
+        parts{i} = Ti(:, keep);
+    end
+    T = vertcat(parts{:});
 end
 
 dayStr = string(day);

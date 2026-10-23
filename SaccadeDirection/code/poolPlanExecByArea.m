@@ -5,11 +5,19 @@ function areaResults = poolPlanExecByArea(sessions, opts)
 % recruitment concentrate in SC/motor-adjacent areas, or is it uniform
 % regardless of area? Same liberal multi-label area pooling as
 % poolTuningByArea.m/decodeByArea.m (extractAreaTokens.m) -- a channel
-% counts toward every area token found in any of its label fields.
+% counts toward every area token found within its ONE labelField's label.
+%
+% Earlier versions of this function pulled tokens from a concatenation of
+% AssignedArea+L6+L5+L4+L3, which conflated genuine within-level candidate
+% uncertainty ("or X or Y") with cross-level hierarchy (e.g. "SC" at the
+% fine level and "colliculi (Co)" at a coarser level are the SAME
+% channels, not two candidate identities). Fixed: operates on exactly one
+% labelField at a time; call it once per level you want (e.g. 'L6' and
+% 'L3') to compare grains.
 %
 % Uses analyzePlanningExecution.m's saccade-onset-locked ('saclocked')
 % results by default -- the methodologically preferred alignment (§4.8) --
-% and excludes 20260224/20260326 (near-zero directional channels in
+% and excludes 20260224/20260326/20260910/20260916 (near-zero directional channels in
 % either window, same convention as summarizePlanningExecution.m).
 %
 % For each area token with enough execution-directional channel-instances
@@ -23,20 +31,24 @@ function areaResults = poolPlanExecByArea(sessions, opts)
 %
 % areaResults = poolPlanExecByArea(sessions, opts)
 %   sessions : struct array from loadAllSessions() (needs S.channelArea)
+%   opts.labelField           : which S.channelArea field to pool by --
+%                               'AssignedArea','L6','L5','L4','L3'
+%                               (default 'L6', finest hierarchy level)
 %   opts.mode                : 'saclocked' or 'gocue' (default 'saclocked')
 %   opts.excludeTokens        : cellstr, non-area qualifiers to drop
 %                               (default {'DEEP','HIGH'}, same as poolTuningByArea.m)
 %   opts.excludeDays          : cellstr, sessions to skip (default
-%                               {'20260224','20260326'})
+%                               {'20260224','20260326','20260910','20260916'})
 %   opts.minExecDirectional   : minimum execution-directional
 %                               channel-instances before reporting an
 %                               area (default 8)
 %   opts.figDir               : default <saccadeDataDir()>/figures
 
 if nargin < 2, opts = struct(); end
+opts = setDefault(opts, 'labelField', 'L6');
 opts = setDefault(opts, 'mode', 'saclocked');
 opts = setDefault(opts, 'excludeTokens', {'DEEP','HIGH'});
-opts = setDefault(opts, 'excludeDays', {'20260224','20260326'});
+opts = setDefault(opts, 'excludeDays', {'20260224','20260326','20260910','20260916'});
 opts = setDefault(opts, 'minExecDirectional', 8);
 opts = setDefault(opts, 'figDir', fullfile(saccadeDataDir(), 'figures'));
 if ~isfolder(opts.figDir), mkdir(opts.figDir); end
@@ -55,12 +67,13 @@ for ri = 1:numel(rows)
     nChan = numel(r.tuningPlan);
     catPlan = classifyTuning([r.tuningPlan.pPerm], [r.tuningPlan.pKW]);
     catExec = classifyTuning([r.tuningExec.pPerm], [r.tuningExec.pKW]);
-    isDirPlan = strcmp(catPlan, 'directional');
-    isDirExec = strcmp(catExec, 'directional');
+    % 'directional'+'directional_complex' == old single 'directional'
+    % category (classifyTuning.m 2026-07-14 split) -- ismember preserves
+    % the original "has some real preferred direction" membership.
+    isDirPlan = ismember(catPlan, {'directional','directional_complex'});
+    isDirExec = ismember(catExec, {'directional','directional_complex'});
     for c = 1:nChan
-        combined = strjoin({S.channelArea.AssignedArea{c}, S.channelArea.L6{c}, ...
-            S.channelArea.L5{c}, S.channelArea.L4{c}, S.channelArea.L3{c}}, ' ');
-        toks = setdiff(extractAreaTokens(combined), opts.excludeTokens);
+        toks = setdiff(extractAreaTokens(S.channelArea.(opts.labelField){c}), opts.excludeTokens);
         if isempty(toks), continue; end
         i = numel(rowData) + 1;
         rowData(i).Tokens = toks; %#ok<AGROW>
@@ -100,7 +113,7 @@ end
 [~, order] = sort([areaResults.PctExecOnly], 'descend'); % sorted to make the range across areas visible at a glance, not buried in the middle
 areaResults = areaResults(order);
 
-outFile = fullfile(saccadeDataDir(), 'planexec_pooled_by_area.mat');
+outFile = fullfile(saccadeDataDir(), sprintf('planexec_pooled_by_area_%s.mat', opts.labelField));
 save(outFile, 'areaResults');
 fprintf('saved %s\n', outFile);
 
@@ -129,10 +142,11 @@ set(ax, 'XTick', x, 'XTickLabel', xLabels, 'XTickLabelRotation', 45, 'Color', 'w
 ylabel(ax, '%');
 legend(ax, hBar, {'% execution-directional NOT tuned in planning ("execution-only")', ...
     '% planning-directional NOT tuned in execution ("planning-only")'}, 'Location', 'northeast', 'TextColor', 'k', 'Color', 'w');
-title(ax, sprintf('Planning-vs-execution recruitment by area (saccade-onset-locked, min %d exec-directional channels/area)', opts.minExecDirectional), 'FontSize', 9, 'Interpreter', 'none');
+title(ax, sprintf('Planning-vs-execution recruitment by area, pooled by %s (saccade-onset-locked, min %d exec-directional channels/area)', opts.labelField, opts.minExecDirectional), 'FontSize', 9, 'Interpreter', 'none');
 forceLightTheme(f);
 if ~isfolder(fullfile(opts.figDir,'pooled')), mkdir(fullfile(opts.figDir,'pooled')); end
-saveas(f, fullfile(opts.figDir, 'pooled', 'planexec_by_area.png'));
+outFile = fullfile(opts.figDir, 'pooled', sprintf('planexec_by_area_%s.png', opts.labelField));
+saveas(f, outFile);
 close(f);
-fprintf('saved %s\n', fullfile(opts.figDir, 'pooled', 'planexec_by_area.png'));
+fprintf('saved %s\n', outFile);
 end
