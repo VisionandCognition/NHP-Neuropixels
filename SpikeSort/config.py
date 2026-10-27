@@ -12,9 +12,10 @@ OUTPUT_ROOT = SERVER_ROOT / "Data_analysis" / "SpikeSorting"  # spike-sorting re
 MANIFEST = OUTPUT_ROOT / "_manifest.csv"
 INVENTORY = OUTPUT_ROOT / "_inventory.csv"
 
-# Local fast scratch for the preprocessed binary + sorter working files (deleted after a
-# successful sort). Needs ~ the size of the raw AP data of the largest experiment.
-SCRATCH = Path.home() / "spikesort_scratch"
+# Local scratch for the preprocessed binary + sorter working files (deleted after a
+# successful sort). Needs ~ the size of the raw AP data of the largest experiment (333 GB).
+# Home NVMe has only ~260 GB free; /media/DATA1 is a 7.3 TB local HDD (slower, but fits all).
+SCRATCH = Path("/media/DATA1/spikesort_scratch")
 
 AP_STREAM_KEY = "ProbeA-AP"
 NIDAQ_STREAM_KEY = "NI-DAQmx"
