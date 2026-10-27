@@ -60,3 +60,14 @@ def sanity_flags(n_units, n_good, n_channels, n_spikes, duration_s):
     if n_channels and duration_s and n_spikes / duration_s / n_channels < s["min_spikes_per_s_per_ch"]:
         flags.append("low_spike_rate")
     return flags
+
+
+def patch_labels(locations_um, gap_um=100.0):
+    """Label channels by contiguous patch along the shank: a new patch starts where the sorted
+    y positions jump by more than gap_um. Returns an int label per channel (input order)."""
+    y = np.asarray(locations_um, dtype=float)[:, 1]
+    order = np.argsort(y, kind="stable")
+    new = np.r_[0, (np.diff(y[order]) > gap_um).astype(int)]
+    labels = np.empty(len(y), dtype=int)
+    labels[order] = np.cumsum(new)
+    return labels
