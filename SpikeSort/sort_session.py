@@ -26,6 +26,7 @@ import pandas as pd
 
 import config
 import export_spikes
+import geometry
 import stage_raw
 from find_recordings import exp_number, rec_number, scan_day
 
@@ -327,7 +328,10 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
     log.info("saving preprocessed binary to %s", scratch / "preprocessed")
     rec_saved = rec_pp.save(folder=str(scratch / "preprocessed"), format="binary", overwrite=True)
 
-    ks_params = dict(config.KS4_PARAMS, **(ks_overrides or {}))
+    geom = geometry.describe(rec_saved.get_channel_locations(), rows[0]["settings_xml"])
+    log.info("electrode configuration: %s", geom)
+    ks_params = dict(config.KS4_PARAMS, **config.KS4_PROFILES.get(geom["profile"], {}),
+                     **(ks_overrides or {}))
     sorting, ks_used = run_kilosort(si, rec_saved, scratch / "ks4", ks_params)
     sorting = sorting.remove_empty_units()
     log.info("Kilosort4 found %d units", sorting.get_num_units())
@@ -340,6 +344,7 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
     if ks_out.exists():
         shutil.copytree(str(ks_out), str(ks_dst), ignore=shutil.ignore_patterns("*.dat", "*.bin"))
 
+    n_spikes = 0
     if sorting.get_num_units() == 0:
         units = pd.DataFrame(columns=["good"])
         n_units = n_good = 0
@@ -351,6 +356,7 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
 
         sv = sorting.to_spike_vector()
         spike_unit = np.asarray(sorting.unit_ids)[sv["unit_index"]].astype(np.int64)
+        n_spikes = len(spike_unit)
         spike_sample = sv["sample_index"].astype(np.int64)
         first_ts = [s["first_timestamp_s"] for s in segs]
         spike_seg, spike_t = export_spikes.spikes_to_times(spike_sample, seg_starts, first_ts, fs)
@@ -368,7 +374,12 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
             export_to_phy(an, str(out / "phy"), compute_pc_features=False, copy_binary=True,
                           remove_if_exists=True, verbose=False)
 
+    n_ch = int(rec_saved.get_num_channels())
+    flags = geometry.sanity_flags(n_units, n_good, n_ch, n_spikes, sum(s["n_samples"] for s in segs) / fs)
+    if flags:
+        log.warning("sanity flags for %s: %s (profile %s)", session_name(exp_n, node), flags, geom["profile"])
     provenance = dict(
+        geometry=geom, sanity_flags=flags, n_spikes=n_spikes,
         monkey=monkey, day=day, node=node, experiment=exp_n,
         finished=datetime.now().isoformat(timespec="seconds"), runtime_min=round((time.time() - t0) / 60, 1),
         host=platform.node(), versions=package_versions(),
@@ -387,7 +398,7 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
         if config.STAGE:
             stage_raw.remove_staged(rows)
     log.info("done: %d units (%d good) in %.1f min -> %s", n_units, n_good, (time.time() - t0) / 60, out)
-    return dict(n_units=n_units, n_good=n_good, out=str(out))
+    return dict(n_units=n_units, n_good=n_good, out=str(out), profile=geom["profile"], flags=";".join(flags))
 
 
 def parse_kv(items):

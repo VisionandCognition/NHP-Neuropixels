@@ -21,7 +21,7 @@ import config
 from find_recordings import exp_number, scan_all
 import sort_session as ss
 
-MANIFEST_FIELDS = ["time", "monkey", "day", "node", "experiment", "status", "n_units", "n_good", "error"]
+MANIFEST_FIELDS = ["time", "monkey", "day", "node", "experiment", "status", "n_units", "n_good", "profile", "flags", "error"]
 
 
 def sort_units(rows):
@@ -81,7 +81,7 @@ def main():
         try:
             res = ss.sort_session(monkey, day, exp_n, node)
             log_manifest(monkey=monkey, day=day, node=node, experiment=exp_n, status="ok",
-                         n_units=res["n_units"], n_good=res["n_good"])
+                         n_units=res["n_units"], n_good=res["n_good"], profile=res["profile"], flags=res["flags"])
         except Exception as e:
             logging.getLogger().error("FAILED %s %s exp%d: %s\n%s", monkey, day, exp_n, e, traceback.format_exc())
             log_manifest(monkey=monkey, day=day, node=node, experiment=exp_n, status="failed",

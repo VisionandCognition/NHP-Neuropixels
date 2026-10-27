@@ -56,6 +56,15 @@ KS4_PARAMS = dict(
 # Tried in order if the sort raises (e.g. CUDA OOM, too few channels for nonrigid).
 KS4_FALLBACKS = [dict(nblocks=1), dict(nblocks=1, batch_size=30000)]
 
+# Per electrode-configuration overrides on top of KS4_PARAMS (profile names from geometry.py:
+# dense_bankA, single_column, four_bank_even, custom_contiguous, custom_sparse). Empty = defaults
+# everywhere until each profile has been piloted. Drift correction (nblocks=5) stays on by default:
+# drift over a whole session can be substantial even if single runs look stable.
+KS4_PROFILES = {}
+
+# Provisional sanity flags written to the manifest (not yet calibrated on NHP data).
+SANITY = dict(min_units=20, max_units_per_channel=1.5, min_good_frac=0.02, min_spikes_per_s_per_ch=0.05)
+
 # --- curation ---------------------------------------------------------------------------
 # A unit is flagged `good` (candidate single unit) if it passes ALL of these.
 # Allen-style starting point; to be validated on hand-labelled NHP units (PLAN.md phase 4).
