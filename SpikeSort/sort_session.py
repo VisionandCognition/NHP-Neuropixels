@@ -101,7 +101,7 @@ def load_recording(rows, exp_n):
     import spikeinterface.full as si
     root = Path(rows[0]["settings_xml"]).parent       # Record-Node folder (holds experimentN/)
     stream_names, _ = si.get_neo_streams("openephysbinary", str(root))
-    ap_streams = [s for s in stream_names if config.AP_STREAM_KEY in s]
+    ap_streams = [s for s in stream_names if s.endswith(config.AP_STREAM_KEY)]  # not "...APSYNC"
     if len(ap_streams) != 1:
         raise RuntimeError("expected one %s stream in %s, got %s" % (config.AP_STREAM_KEY, root, stream_names))
     # neo exposes each experiment as a block, in sorted order of the experiment folders present
