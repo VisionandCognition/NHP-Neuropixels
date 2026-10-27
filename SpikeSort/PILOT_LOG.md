@@ -58,3 +58,8 @@ or higher good count. Final judgement by eye (raster / Phy) on the most promisin
 ## Log
 
 - 2026-10-27: pilots queued behind `20251010 exp2 --phy` (Phy-check run; GPU busy until it finishes).
+- 2026-10-27 18:42: `m032 20251010 exp2 --phy` finished: 526 units (62 good), 4.2 M spikes, 62.6 min for 32.6 min of
+  data (copy 8.2 min at gigabit, Phy export ~8 min). Phy folder (43 GB incl. recording.dat) is on the server and
+  loads headlessly (phylib: 526 clusters, waveform read OK). No PC features in the export, so Phy's feature view is
+  empty. Pilot queue started automatically right after.
+  Open in Phy on the desktop (DWService): `cd <out>/phy && /home/chris/anaconda3/envs/phy2/bin/phy template-gui params.py`
