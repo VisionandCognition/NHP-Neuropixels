@@ -1,0 +1,26 @@
+# conda env for the spike-sorting pipeline (Linux Mint desktop, RTX 3060).
+#   conda env create -f environment.yml && conda activate spikesort
+# Versions pinned to the SpikeInterface-documented set as of 2026-06; if a pin fails to
+# resolve, relax it and record the working versions in README.md ("Validation status").
+# torch must be a CUDA build; the extra index below provides it (check `nvidia-smi` for the
+# driver's max CUDA version and adjust cu126 if needed).
+name: spikesort
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pip
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - h5py
+  - pip:
+      - --extra-index-url https://download.pytorch.org/whl/cu126
+      - torch
+      - spikeinterface[full]==0.104.3
+      - kilosort==4.1.7
+      - probeinterface==0.3.2
+      - neo==0.14.4
+      - skops
+      - huggingface_hub
