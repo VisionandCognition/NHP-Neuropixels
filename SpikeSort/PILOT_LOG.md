@@ -62,7 +62,8 @@ or higher good count. Final judgement by eye (raster / Phy) on the most promisin
   data (copy 8.2 min at gigabit, Phy export ~8 min). Phy folder (43 GB incl. recording.dat) is on the server and
   loads headlessly (phylib: 526 clusters, waveform read OK). No PC features in the export, so Phy's feature view is
   empty. Pilot queue started automatically right after.
-  Open in Phy on the desktop (DWService): `cd <out>/phy && /home/chris/anaconda3/envs/phy2/bin/phy template-gui params.py`
+  Open in Phy on the desktop (DWService): `./phy.sh [phy folder]`. Plain `phy template-gui` segfaulted (QtWebEngine GPU
+  thread, `Chrome_InProcGp` in libQt5WebEngineCore, 2026-10-27 20:31); `phy.sh` sets `QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --no-sandbox"`.
 
 ## Pilot results (2026-10-27, 3-min slices, nblocks=1; `pilots/results.csv`)
 
