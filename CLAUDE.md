@@ -4,7 +4,7 @@ Macaque Neuropixels ephys analysis. Main active pipeline: `SaccadeDirection/` (s
 
 Per-channel anatomy labels come from `SaccadeDirection/anatomy/anatomy_template_clusters_hierarchical.csv` (hand-assigned against CHARM/SARM atlas by eye, not verified histology), looked up via `SaccadeDirection/code/getChannelArea.m`. Hierarchy columns `L6` (finest) → `L3` (coarsest) are CHARM (cortex) / SARM (subcortex) parcel names.
 
-Don't run git commands in this project — user handles git themselves.
+Git: a Stop hook (`.claude/hooks/autosync.sh`, set up 2026-10-27 at user's request) auto-commits and pushes after every Claude turn. Don't run git commands manually otherwise; if sync fails, see `.claude/hooks/autosync.log`.
 
 ## VisualizeOnAreas — anatomical visualization of saccade metrics (in progress, 2026-07-22/23)
 

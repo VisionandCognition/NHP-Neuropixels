@@ -5,3 +5,6 @@ SaccadeDirection/Kwibus_20240711_GridCT_chamber_CK.mrb
 
 .~lock.*#
 SaccadeDirection/code/__pycache__/
+
+.DS_Store
+.claude/hooks/autosync.log
