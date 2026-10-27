@@ -76,7 +76,7 @@ or higher good count. Final judgement by eye (raster / Phy) on the most promisin
 | | dminx103 | 368 | 51 | 241 k | 149 s |
 | | drop_strays (2 ch only) | 381 | 52 | 246 k | 253 s |
 | | drop_strays + dminx103 | 357 | 49 | 240 k | 149 s |
-| | by_patch | FAILED first time (quiet 56-ch patch: "n_samples=5 should be >= n_clusters=6"); code now skips failed patches; rerun pending |
+| | by_patch (rerun, failed patches skipped) | 269 | 39 | 198 k | 130 s | (84-ch patch failed: Kilosort could not initialise templates, "n_samples=5 should be >= n_clusters=6"; 22 % of channels lost) |
 | 20260325 fragmented | default (384 ch, 51 patches) | 375 | 82 | 373 k | 227 s |
 | | drop_strays + dminx103 (287 ch, 5 patches) | 305 | 74 | 351 k | 105 s |
 | | by_patch (287 ch) | 302 | 78 | 350 k | 102 s |
@@ -98,3 +98,11 @@ only 12-25 % of units pass, so most output is MUA-like either way. 3-min slices 
 Dropping the 2 strays on 20260317 had no effect (only 2 of 384 channels). T4 conflates stray-dropping
 with dminx (no drop-only variant); the 25 % channel loss on 20260325 (97 ch in 46 tiny patches) cost only
 8 of 82 good units and halved runtime.
+
+**Per-patch sorting: not worth it.** On 20260317 it lost a whole 84-channel patch (Kilosort crashed on it)
+and gave 39 good units vs 49-52 for whole-probe sorting; on 20260325 it matched drop_strays+dminx103 (78 vs 74
+good). Whole-probe Kilosort handles the mm-wide gaps fine, so no extra machinery. Failed-patch handling kept in
+pilot code only (not in production `sort_session.py`).
+
+**Proposed production changes (pending the Phy look):** `KS4_PROFILES` dminx=103 for all profiles; drop
+patches < 8 channels for sorting (matters on fragmented days like 20260324/0325); keep `nblocks=5`.
