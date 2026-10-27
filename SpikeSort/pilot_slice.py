@@ -141,14 +141,19 @@ def run_variant(si, rec_full, key, name, secs, check_only=False):
         return None
     folder = PILOT_ROOT / key / ("ks_" + name)
     t = time.time()
+    failed = []
     if spec.get("by_patch"):
-        sortings = []
+        sortings, failed = [], []
         for g, gids in groups:
             if len(gids) < 20:          # too small for template matching
                 continue
             sub = rec.select_channels(gids)
             kg = dict(ks, nblocks=1 if len(gids) < 150 else ks["nblocks"])
-            sortings.append(run_ks(si, sub, folder / ("patch%d" % g), kg))
+            try:
+                sortings.append(run_ks(si, sub, folder / ("patch%d" % g), kg))
+            except Exception as e:      # e.g. a quiet patch: too few spikes to initialise templates
+                log.warning("patch %d (%d ch) failed, skipped: %s", g, len(gids), str(e).strip().splitlines()[-1][:120])
+                failed.append("patch%d(%dch)" % (g, len(gids)))
         sorting = si.aggregate_units(sortings) if len(sortings) > 1 else sortings[0]
         used = ks_settings_used(folder)
     else:
@@ -160,7 +165,8 @@ def run_variant(si, rec_full, key, name, secs, check_only=False):
         q.to_csv(str(PILOT_ROOT / key / ("units_" + name + ".csv")))
     row = dict(time=pd.Timestamp.now().isoformat(timespec="seconds"), key=key, variant=name,
                ks_runtime_s=round(ks_s, 1), n_channels=gsum["n_channels"], n_patches=gsum["n_patches"],
-               ks_params=json.dumps(ks, default=str), ks_used=json.dumps(used), **summ)
+               ks_params=json.dumps(ks, default=str), ks_used=json.dumps(used),
+               note=("failed: " + ",".join(failed)) if failed else "", **summ)
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame([row]).to_csv(str(RESULTS), mode="a", header=not RESULTS.exists(), index=False)
     log.info("[%s/%s] %s", key, name, {k: row[k] for k in ("n_units", "n_good", "n_spikes", "ks_runtime_s")})

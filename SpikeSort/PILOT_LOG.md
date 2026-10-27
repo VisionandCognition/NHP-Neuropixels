@@ -63,3 +63,38 @@ or higher good count. Final judgement by eye (raster / Phy) on the most promisin
   loads headlessly (phylib: 526 clusters, waveform read OK). No PC features in the export, so Phy's feature view is
   empty. Pilot queue started automatically right after.
   Open in Phy on the desktop (DWService): `cd <out>/phy && /home/chris/anaconda3/envs/phy2/bin/phy template-gui params.py`
+
+## Pilot results (2026-10-27, 3-min slices, nblocks=1; `pilots/results.csv`)
+
+| Slice | Variant | Units | Good | Spikes | KS runtime |
+|---|---|---|---|---|---|
+| 20260323 single column | default (dminx 32) | 416 | 98 | 824 k | 238 s |
+| | dminx103 | 328 | 93 | 774 k | 135 s |
+| 20260819 four_bank_even | default | 399 | 76 | 404 k | 192 s |
+| | dminx103 | 335 | 75 | 385 k | 118 s |
+| 20260317 custom patches | default | 385 | 52 | 248 k | 251 s |
+| | dminx103 | 368 | 51 | 241 k | 149 s |
+| | drop_strays (2 ch only) | 381 | 52 | 246 k | 253 s |
+| | drop_strays + dminx103 | 357 | 49 | 240 k | 149 s |
+| | by_patch | FAILED first time (quiet 56-ch patch: "n_samples=5 should be >= n_clusters=6"); code now skips failed patches; rerun pending |
+| 20260325 fragmented | default (384 ch, 51 patches) | 375 | 82 | 373 k | 227 s |
+| | drop_strays + dminx103 (287 ch, 5 patches) | 305 | 74 | 351 k | 105 s |
+| | by_patch (287 ch) | 302 | 78 | 350 k | 102 s |
+
+Kilosort's auto `dmin` = 20 um on the single column (20 um pitch) and 40 um on the 40-um-pitch layouts; `dminx` as set.
+
+**Agreement check default vs dminx103 (`compare_two_sorters`, delta 0.4 ms, match >= 0.5):**
+- 90 / 92 / 98 % of the default `good` units are re-found with dminx103 (T1 / T2 / T3), and 86 / 65 / 48 of those matches are also `good`.
+- 19-31 % of default units have no counterpart in dminx103 (131/416, 103/399, 75/385), but only 10 / 6 / 1 of them were `good`.
+- 43 / 40 / 61 dminx103 units have no counterpart in default; only 5 / 6 / 0 are `good`.
+
+**Reading:** dminx=103 keeps nearly all well-isolated units, drops ~15-20 % of units that are almost all
+low-quality, and cuts Kilosort time ~40 %. Consistent with the over-splitting hypothesis (32 um places
+redundant template centres on this probe), but NOT proof: a lost non-good unit could be a real low-amplitude
+neuron. Needs a look in Phy (compare matched vs unmatched units) before changing the production default.
+
+**Caveats:** `good` uses weak thresholds (SNR >= 3 etc., unvalidated on NHP); median SNR is only ~2.6-3.5 and
+only 12-25 % of units pass, so most output is MUA-like either way. 3-min slices say nothing about drift.
+Dropping the 2 strays on 20260317 had no effect (only 2 of 384 channels). T4 conflates stray-dropping
+with dminx (no drop-only variant); the 25 % channel loss on 20260325 (97 ch in 46 tiny patches) cost only
+8 of 82 good units and halved runtime.
