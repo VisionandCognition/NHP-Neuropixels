@@ -30,7 +30,7 @@ N_JOBS = max(1, (os.cpu_count() or 2) // 2)  # SpikeInterface chunked-processing
 # CMR is done here, so Kilosort's own CAR is switched off in KS4_PARAMS (avoid double CAR).
 PREPROC = dict(
     highpass_hz=300.0,
-    bad_channel_method="coherence+psd",
+    bad_channel_method="mad",   # "coherence+psd" (IBL, mouse-tuned) flagged all 384 ch on noisy NHP days (20260323)
     reference="median",   # "median" | "destripe" (spatial high-pass, as in XinyuScripts/getmua.m)
 )
 
