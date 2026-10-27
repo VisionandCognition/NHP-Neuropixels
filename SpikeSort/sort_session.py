@@ -282,7 +282,8 @@ def package_versions():
     return v
 
 
-def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=False, dry_run=False):
+def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=False, dry_run=False,
+                 phy=False):
     t0 = time.time()
     out = out_dir_for(monkey, day, exp_n, node)
     rows = select_recordings(monkey, day, exp_n, node)
@@ -358,6 +359,14 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
                                 spike_seg, spike_t, segs, fs)
         export_spikes.write_mat(str(out / "spikes.mat"), units, unit_ids, spike_unit, spike_t, segs, fs)
         qc_figures(units, spike_unit, spike_t, out / "figures")
+        if phy:
+            # Phy folder incl. a copy of the preprocessed binary (recording.dat, ~ raw size) so
+            # curation can be done later without re-copying/re-preprocessing. PC features are
+            # skipped (large); Kilosort's own pc_features.npy are in ks4_raw/.
+            from spikeinterface.exporters import export_to_phy
+            log.info("exporting Phy folder (copies preprocessed binary) -> %s", out / "phy")
+            export_to_phy(an, str(out / "phy"), compute_pc_features=False, copy_binary=True,
+                          remove_if_exists=True, verbose=False)
 
     provenance = dict(
         monkey=monkey, day=day, node=node, experiment=exp_n,
@@ -401,10 +410,12 @@ def main():
     ap.add_argument("--ks", action="append", metavar="KEY=VAL", help="Kilosort4 parameter override")
     ap.add_argument("--keep-scratch", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="only select recordings and report size")
+    ap.add_argument("--phy", action="store_true",
+                    help="also write <out>/phy incl. a copy of the preprocessed binary (for curation in Phy)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     sort_session(args.monkey, args.day, args.experiment, args.node, parse_kv(args.ks),
-                 args.keep_scratch, args.dry_run)
+                 args.keep_scratch, args.dry_run, args.phy)
 
 
 if __name__ == "__main__":

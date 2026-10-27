@@ -75,9 +75,22 @@ def _stage_one(row):
     return dst
 
 
+def check_link():
+    """Warn loudly if the NIC negotiated below gigabit (staging would take ~8x longer)."""
+    try:
+        speed = int(Path("/sys/class/net/%s/speed" % config.NET_IFACE).read_text())
+    except Exception:
+        return None
+    if speed < 1000:
+        log.warning("network link %s is only %d Mb/s (expected 1000): copies will be ~8x slower. "
+                    "Try `sudo ethtool -r %s`", config.NET_IFACE, speed, config.NET_IFACE)
+    return speed
+
+
 def stage_rows(rows, streams=None):
     """Copy every recording of the experiment; return rows pointing at the local copy."""
     streams = streams or config.STAGE_STREAMS
+    check_link()
     first = rows[0]
     src_root = Path(first["settings_xml"]).parent
     dst_root = staged_root(first)

@@ -21,7 +21,9 @@ SCRATCH = Path("/media/DATA1/spikesort_scratch")
 # once to local disk (stage_raw.py) and sorted from there. Deleted after a successful sort.
 STAGE = True
 STAGE_ROOT = Path("/media/DATA1/spikesort_raw")
-STAGE_STREAMS = 3   # parallel rsync streams (shared server: keep modest)
+STAGE_STREAMS = 2   # parallel rsync streams; one stream already saturates gigabit (~92 MB/s)
+NET_IFACE = "eno1"  # checked before staging: the link has fallen back to 100 Mb/s after flaps
+                    # (fix: `sudo ethtool -r eno1`)
 
 AP_STREAM_KEY = "ProbeA-AP"
 NIDAQ_STREAM_KEY = "NI-DAQmx"
