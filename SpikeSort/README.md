@@ -20,7 +20,7 @@ python -c "import torch, kilosort, spikeinterface; print(torch.cuda.is_available
 Do **not** let pip replace your CUDA torch (check the check line prints `True`). `environment.yml` is only
 for building a fresh env from scratch. Record the working versions under "Validation status" below.
 
-Paths and parameters: `config.py` (server root, scratch dir `~/spikesort_scratch`, Kilosort/curation settings).
+Paths and parameters: `config.py` (server root, scratch dir `/media/DATA1/spikesort_scratch` (local 7.3 TB HDD; home NVMe too small for the largest days), Kilosort/curation settings).
 Scratch needs roughly the size of the largest experiment's raw AP data free.
 
 ## Usage
