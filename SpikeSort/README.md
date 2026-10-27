@@ -91,7 +91,7 @@ t = S["spike_time_s"][S["spike_unit"] == units.index[0]]
 5. Compare sorted units with known MUA tuning (e.g. 20260323).
 6. Validate `config.CURATION` / UnitRefine on ~100 hand-labelled units.
 
-Working versions: _(fill in)_
+Working versions (desktop `kilosort` env, 2026-10-27): torch 2.5.1 (CUDA ok), kilosort 4.0.24, spikeinterface 0.103.2, probeinterface 0.3.1, neo 0.14.3.
 
 ## Known limitations
 - Cross-session unit tracking not implemented (UnitMatch later).
