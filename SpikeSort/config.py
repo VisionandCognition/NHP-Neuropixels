@@ -17,6 +17,12 @@ INVENTORY = OUTPUT_ROOT / "_inventory.csv"
 # Home NVMe has only ~260 GB free; /media/DATA1 is a 7.3 TB local HDD (slower, but fits all).
 SCRATCH = Path("/media/DATA1/spikesort_scratch")
 
+# The server link is slow (~12 MB/s, see PLAN.md), so each experiment's raw AP data is copied
+# once to local disk (stage_raw.py) and sorted from there. Deleted after a successful sort.
+STAGE = True
+STAGE_ROOT = Path("/media/DATA1/spikesort_raw")
+STAGE_STREAMS = 3   # parallel rsync streams (shared server: keep modest)
+
 AP_STREAM_KEY = "ProbeA-AP"
 NIDAQ_STREAM_KEY = "NI-DAQmx"
 

@@ -26,6 +26,7 @@ import pandas as pd
 
 import config
 import export_spikes
+import stage_raw
 from find_recordings import exp_number, rec_number, scan_day
 
 log = logging.getLogger("sort_session")
@@ -298,12 +299,18 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
 
     scratch = config.SCRATCH / ("%s_%s_%s" % (monkey, day, session_name(exp_n, node)))
     scratch.mkdir(parents=True, exist_ok=True)
+    need_gb = (2.3 if config.STAGE else 1.3) * total_gb   # staged raw + preprocessed copy
     free_gb = shutil.disk_usage(str(scratch)).free / 1e9
-    if free_gb < 1.3 * total_gb:
-        raise RuntimeError("scratch has %.0f GB free, need ~%.0f GB (%s)" % (free_gb, 1.3 * total_gb, scratch))
+    if free_gb < need_gb:
+        raise RuntimeError("scratch has %.0f GB free, need ~%.0f GB (%s)" % (free_gb, need_gb, scratch))
     out.mkdir(parents=True, exist_ok=True)
     if (out / "DONE.json").exists():
         (out / "DONE.json").unlink()   # mark as incomplete while re-running
+
+    if config.STAGE:
+        t_stage = time.time()
+        rows = stage_raw.stage_rows(rows)   # local copy of the whole experiment (incl. short recordings)
+        log.info("staged in %.1f min", (time.time() - t_stage) / 60)
 
     segs = [segment_info(rows[i]) for i in keep_idx]
     si, rec = load_recording(rows, exp_n)
@@ -368,6 +375,8 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
                                                    finished=provenance["finished"])))
     if not keep_scratch:
         shutil.rmtree(str(scratch), ignore_errors=True)
+        if config.STAGE:
+            stage_raw.remove_staged(rows)
     log.info("done: %d units (%d good) in %.1f min -> %s", n_units, n_good, (time.time() - t0) / 60, out)
     return dict(n_units=n_units, n_good=n_good, out=str(out))
 
