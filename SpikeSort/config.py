@@ -39,6 +39,7 @@ N_JOBS = max(1, (os.cpu_count() or 2) // 2)  # SpikeInterface chunked-processing
 PREPROC = dict(
     highpass_hz=300.0,
     std_mad_threshold=3,   # SI default 5 missed a 3.4x-noisy channel (m032 20251010 ch300); 0 flags on 4 other pilot days
+    min_patch_channels=8,  # drop isolated channels (patches < 8 ch along the shank) for sorting; they cannot support template matching
     max_noise_ratio=3.0,   # also drop channels whose std exceeds this x the probe median (after referencing)
     bad_channel_method="mad",   # "coherence+psd" (IBL, mouse-tuned) flagged all 384 ch on noisy NHP days (20260323)
     reference="median",   # "median" | "destripe" (spatial high-pass, as in XinyuScripts/getmua.m)
@@ -62,7 +63,12 @@ KS4_FALLBACKS = [dict(nblocks=1), dict(nblocks=1, batch_size=30000)]
 # dense_bankA, single_column, four_bank_even, custom_contiguous, custom_sparse). Empty = defaults
 # everywhere until each profile has been piloted. Drift correction (nblocks=5) stays on by default:
 # drift over a whole session can be substantial even if single runs look stable.
-KS4_PROFILES = {}
+# dminx=103: the two contact columns are ~103 um apart (x = 11, 114); Kilosort's 32 um default is tuned for
+# NP1/2. Pilots (PILOT_LOG.md): ~-20 % units, same good count, ~-40 % Kilosort time on single_column,
+# four_bank_even, custom (0317) and fragmented (0325) slices. dense_bankA not piloted (same probe columns).
+DMINX = dict(dminx=103)
+KS4_PROFILES = {p: dict(DMINX) for p in
+                ("dense_bankA", "single_column", "four_bank_even", "custom_contiguous", "custom_sparse")}
 
 # Provisional sanity flags written to the manifest (not yet calibrated on NHP data).
 SANITY = dict(min_units=20, max_units_per_channel=1.5, min_good_frac=0.02, min_spikes_per_s_per_ch=0.05)

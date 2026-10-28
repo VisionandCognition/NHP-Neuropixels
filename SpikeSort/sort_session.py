@@ -150,12 +150,21 @@ def preprocess(si, rec):
              {k: int((labels == k).sum()) for k in np.unique(labels)})
     if len(bad_ids):
         out = out.remove_channels(bad_ids)
+    # isolated strays (custom layouts): patches along the shank with < min_patch_channels channels
+    stray_ids = []
+    if pp.get("min_patch_channels"):
+        labels_p = geometry.patch_labels(out.get_channel_locations())
+        counts = np.bincount(labels_p)
+        stray_ids = list(np.asarray(out.channel_ids)[counts[labels_p] < pp["min_patch_channels"]])
+        if stray_ids:
+            log.info("dropping %d stray channels (patches < %d ch) for sorting", len(stray_ids), pp["min_patch_channels"])
+            out = out.remove_channels(stray_ids)
     if pp["reference"] == "destripe":
         out = si.highpass_spatial_filter(out)
     else:
         out = si.common_reference(out, operator="median", reference="global")
     out = si.astype(out, "int16")   # keep scratch the same size as raw
-    return out, dict(bad_channel_ids=[str(b) for b in bad_ids],
+    return out, dict(bad_channel_ids=[str(b) for b in bad_ids], stray_channel_ids=[str(b) for b in stray_ids],
                      n_channels_kept=int(out.get_num_channels()), preproc=pp)
 
 
