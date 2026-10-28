@@ -153,3 +153,10 @@ Applied: `KS4_PROFILES` dminx=103 for all profiles (dense_bankA unpiloted), `PRE
 `20251010 exp1` re-sort: 343 units, 47 good, 1.26 M spikes, 12.1 min total (staging 2.7 min; old run 402 / 46 good, 38.7 min
 incl. 21.7 min copy at 100 Mb/s). Bad channels: AP191 and AP300 again (same two as exp2 -> probably permanently noisy on this
 probe/day; worth checking other days). Stray-drop path not exercised yet (single column). 25 units still peak at y=7600 (probe tip).
+
+### run_batch test (2026-10-28): --until, prefetch, STOP, stray drop
+Ran `--only 20260303:1 --only 20260326:1 --until <+3h>`: both OK. Prefetch of 0326 (8 min copy) overlapped the 0303 sort; its
+own staging then took 0.0 min. Stray drop worked (0303: 7 channels in patches < 8 ch). Staged raw removed after each session.
+- 20260303 exp1 (custom_sparse, 34 min): 429 units, only 3 good (flag `low_good_frac`), median SNR 0.9, 27 units with SNR >= 3 -> low-yield day, flagged as intended.
+- 20260326 exp1 (four_bank_even, 38 GB): 165 units, 52 good, 21.5 min total (~0.57 min/GB; estimate of 1.2 min/GB is conservative).
+Full chronological batch started afterwards (no --until; stop with `SpikeSort/STOP`).
