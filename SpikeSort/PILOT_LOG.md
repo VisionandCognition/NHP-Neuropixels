@@ -136,3 +136,13 @@ Headless check of `exp2/phy` (script logic: units.csv + phy template files + rec
   PermissionError); `--resume` reuses scratch preprocessed binary + Kilosort output; an open Phy window holding
   the share's phy/ folder blocks overwriting it (close Phy before re-running with --phy).
 - Pilot slices (3 min) and exp1 used the old preprocessing -> the dminx comparison must be redone. 
+
+### Pilot rerun with fixed preprocessing: 20260323 single column (2026-10-28)
+New preprocessing removed 0 channels on this slice, so the old pilot was not affected by the noisy-channel bug.
+| Variant | Units | Good | Spikes | KS runtime |
+|---|---|---|---|---|
+| default (dminx 32) | 405 | 95 | 790 k | 220 s |
+| dminx103 | 322 | 95 | 746 k | 135 s |
+(old: 416/98 and 328/93.) Same picture: -20 % units, same good count, -40 % runtime.
+Other cached pilot days: top channel std/median was 1.6-1.9 on 0317, 0325 and smoke(0323); 0819 has one 3.1x channel
+(would now be dropped). So only the 0819 pilot is expected to change; 0317/0325 results stand.
