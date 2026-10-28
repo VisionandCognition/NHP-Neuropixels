@@ -146,3 +146,10 @@ New preprocessing removed 0 channels on this slice, so the old pilot was not aff
 (old: 416/98 and 328/93.) Same picture: -20 % units, same good count, -40 % runtime.
 Other cached pilot days: top channel std/median was 1.6-1.9 on 0317, 0325 and smoke(0323); 0819 has one 3.1x channel
 (would now be dropped). So only the 0819 pilot is expected to change; 0317/0325 results stand.
+
+### Production defaults applied + exp1 re-sort (2026-10-28)
+Applied: `KS4_PROFILES` dminx=103 for all profiles (dense_bankA unpiloted), `PREPROC.min_patch_channels=8` (stray drop, logs
+`stray_channel_ids`), bad-channel rules above, nblocks=5 kept.
+`20251010 exp1` re-sort: 343 units, 47 good, 1.26 M spikes, 12.1 min total (staging 2.7 min; old run 402 / 46 good, 38.7 min
+incl. 21.7 min copy at 100 Mb/s). Bad channels: AP191 and AP300 again (same two as exp2 -> probably permanently noisy on this
+probe/day; worth checking other days). Stray-drop path not exercised yet (single column). 25 units still peak at y=7600 (probe tip).
