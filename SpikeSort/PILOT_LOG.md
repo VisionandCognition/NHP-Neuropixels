@@ -122,3 +122,17 @@ Headless check of `exp2/phy` (script logic: units.csv + phy template files + rec
 - Real over-splitting among the 177 clean-channel units looks modest: 15 candidate merge pairs (similar template,
   CCG dip, merged ISI violation < 1 %) involving 28 units, 1 of them good.
 - Of the 62 good units, 14 have ISI violation ratio > 0.2 (thresholds are loose).
+
+### Re-sort of 20251010 exp2 with fixed bad-channel detection (2026-10-28)
+- Preprocessing now: detect on median-referenced signal, `std_mad_threshold=3` (SI default 5 missed AP300 at 3.4x
+  median std), plus drop channels with std > 3x probe median (`config.PREPROC`). Removed AP191 and AP300.
+  Cutoff 3 flags 0 channels on the 4 other cached pilot days (incl. noisy 20260323); the 3x-median rule would flag 1 on 20260819.
+- Result: 518 units, 76 good (was 526 / 62), 50.9 min. 425 units on 223 channels (max 8 per channel, 74 good);
+  93 units at the probe ends (y <= 20 or >= 7600 um; 57 at y=7600) hold only 2 good -> edge artefacts, low priority.
+- Total spike count stayed ~4.2 M in all three sorts (old, AP191 removed only, both removed): Kilosort's whitening
+  rescales each channel, so a noisy channel still yields about the same number of detections; the damage was
+  unit labels/clutter, not lost real units.
+- sort_session: analyzer now built on local scratch then copied (memmap flush on SMB intermittently gave
+  PermissionError); `--resume` reuses scratch preprocessed binary + Kilosort output; an open Phy window holding
+  the share's phy/ folder blocks overwriting it (close Phy before re-running with --phy).
+- Pilot slices (3 min) and exp1 used the old preprocessing -> the dminx comparison must be redone. 
