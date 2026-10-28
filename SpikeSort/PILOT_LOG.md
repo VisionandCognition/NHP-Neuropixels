@@ -107,3 +107,18 @@ pilot code only (not in production `sort_session.py`).
 
 **Proposed production changes (pending the Phy look):** `KS4_PROFILES` dminx=103 for all profiles; drop
 patches < 8 channels for sorting (matters on fragmented days like 20260324/0325); keep `nblocks=5`.
+
+## Phy-output inspection of 20251010 exp2 (2026-10-28) — noisy channel bug
+
+Headless check of `exp2/phy` (script logic: units.csv + phy template files + recording.dat):
+- **349 of 526 units (66 %), 2.35 M of 4.2 M spikes, 0 good, median SNR 0.5, all peak on ONE channel (AP191, y=5740 um, x=103).**
+  That channel has rms 1325 vs probe median 151 (9x, highest of 384). The other 177 units sit on 115 channels (max 7/channel),
+  62 good, median SNR 3.2. So the "526 units / 62 good" headline is mostly Kilosort templating noise on one channel.
+- Cause: `preprocess` ran `detect_bad_channels(mad)` before the median reference; shared noise dominates there
+  (ch191 only 2x the median std) so nothing was flagged ("bad_channel_ids": []). After referencing it is flagged
+  (also at lower thresholds ch300). **Fix applied in `sort_session.preprocess`: detect on the median-referenced signal.**
+  Not yet re-run. exp1 and the 3-min pilots used the old preprocessing, so they may carry the same problem: the
+  default-vs-dminx103 unit counts (and over-splitting reading) above are suspect until redone with the fix.
+- Real over-splitting among the 177 clean-channel units looks modest: 15 candidate merge pairs (similar template,
+  CCG dip, merged ISI violation < 1 %) involving 28 units, 1 of them good.
+- Of the 62 good units, 14 have ISI violation ratio > 0.2 (thresholds are loose).

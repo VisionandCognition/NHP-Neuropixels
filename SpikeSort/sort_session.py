@@ -138,7 +138,10 @@ def preprocess(si, rec):
         log.info("set inter_sample_shift from NP1 ADC table")
     out = si.phase_shift(rec)
     out = si.highpass_filter(out, freq_min=pp["highpass_hz"])
-    bad_ids, labels = si.detect_bad_channels(out, method=pp["bad_channel_method"])
+    # Detect on the median-referenced signal: before referencing, shared noise dominates the
+    # per-channel MAD and a channel 9x noisier than the rest (m032 20251010 ch191) is not flagged.
+    bad_ids, labels = si.detect_bad_channels(si.common_reference(out, operator="median", reference="global"),
+                                             method=pp["bad_channel_method"])
     log.info("bad channels removed: %d (%s)", len(bad_ids),
              {k: int((labels == k).sum()) for k in np.unique(labels)})
     if len(bad_ids):
