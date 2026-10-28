@@ -140,8 +140,12 @@ def preprocess(si, rec):
     out = si.highpass_filter(out, freq_min=pp["highpass_hz"])
     # Detect on the median-referenced signal: before referencing, shared noise dominates the
     # per-channel MAD and a channel 9x noisier than the rest (m032 20251010 ch191) is not flagged.
-    bad_ids, labels = si.detect_bad_channels(si.common_reference(out, operator="median", reference="global"),
-                                             method=pp["bad_channel_method"])
+    ref = si.common_reference(out, operator="median", reference="global")
+    bad_ids, labels = si.detect_bad_channels(ref, method=pp["bad_channel_method"],
+                                             std_mad_threshold=pp["std_mad_threshold"])
+    noise = si.get_noise_levels(ref, return_scaled=False, method="std")
+    loud = ref.channel_ids[noise > pp["max_noise_ratio"] * np.median(noise)]
+    bad_ids = np.unique(np.concatenate([np.asarray(bad_ids), np.asarray(loud)])) if len(loud) else bad_ids
     log.info("bad channels removed: %d (%s)", len(bad_ids),
              {k: int((labels == k).sum()) for k in np.unique(labels)})
     if len(bad_ids):
