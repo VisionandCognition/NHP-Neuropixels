@@ -287,7 +287,7 @@ def package_versions():
 
 
 def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=False, dry_run=False,
-                 phy=False):
+                 phy=False, resume=False):
     t0 = time.time()
     out = out_dir_for(monkey, day, exp_n, node)
     rows = select_recordings(monkey, day, exp_n, node)
@@ -329,13 +329,21 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
 
     rec_pp, pp_info = preprocess(si, rec)
     log.info("saving preprocessed binary to %s", scratch / "preprocessed")
-    rec_saved = rec_pp.save(folder=str(scratch / "preprocessed"), format="binary", overwrite=True)
+    if resume and (scratch / "preprocessed" / "binary.json").exists():
+        log.info("resume: reusing preprocessed binary")
+        rec_saved = si.load(str(scratch / "preprocessed"))
+    else:
+        rec_saved = rec_pp.save(folder=str(scratch / "preprocessed"), format="binary", overwrite=True)
 
     geom = geometry.describe(rec_saved.get_channel_locations(), rows[0]["settings_xml"])
     log.info("electrode configuration: %s", geom)
     ks_params = dict(config.KS4_PARAMS, **config.KS4_PROFILES.get(geom["profile"], {}),
                      **(ks_overrides or {}))
-    sorting, ks_used = run_kilosort(si, rec_saved, scratch / "ks4", ks_params)
+    if resume and (scratch / "ks4" / "sorter_output" / "spike_times.npy").exists():
+        log.info("resume: reusing Kilosort output")
+        sorting, ks_used = si.read_sorter_folder(str(scratch / "ks4")), ks_params
+    else:
+        sorting, ks_used = run_kilosort(si, rec_saved, scratch / "ks4", ks_params)
     sorting = sorting.remove_empty_units()
     log.info("Kilosort4 found %d units", sorting.get_num_units())
 
@@ -352,7 +360,12 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
         units = pd.DataFrame(columns=["good"])
         n_units = n_good = 0
     else:
-        an = build_analyzer(si, sorting, rec_saved, out / "analyzer")
+        # build on local scratch (memmap flush on the SMB share intermittently fails with
+        # PermissionError), then copy to the server
+        an = build_analyzer(si, sorting, rec_saved, scratch / "analyzer")
+        if (out / "analyzer").exists():
+            shutil.rmtree(str(out / "analyzer"))
+        shutil.copytree(str(scratch / "analyzer"), str(out / "analyzer"))
         units = unit_table(si, an, rec_saved, ks_out)
         n_units, n_good = len(units), int(units["good"].sum())
         units.to_csv(str(out / "units.csv"))
@@ -424,12 +437,14 @@ def main():
     ap.add_argument("--ks", action="append", metavar="KEY=VAL", help="Kilosort4 parameter override")
     ap.add_argument("--keep-scratch", action="store_true")
     ap.add_argument("--dry-run", action="store_true", help="only select recordings and report size")
+    ap.add_argument("--resume", action="store_true",
+                    help="reuse preprocessed binary / Kilosort output left in scratch by a failed run")
     ap.add_argument("--phy", action="store_true",
                     help="also write <out>/phy incl. a copy of the preprocessed binary (for curation in Phy)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     sort_session(args.monkey, args.day, args.experiment, args.node, parse_kv(args.ks),
-                 args.keep_scratch, args.dry_run, args.phy)
+                 args.keep_scratch, args.dry_run, args.phy, args.resume)
 
 
 if __name__ == "__main__":
