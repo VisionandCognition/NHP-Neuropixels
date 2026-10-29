@@ -160,3 +160,14 @@ own staging then took 0.0 min. Stray drop worked (0303: 7 channels in patches < 
 - 20260303 exp1 (custom_sparse, 34 min): 429 units, only 3 good (flag `low_good_frac`), median SNR 0.9, 27 units with SNR >= 3 -> low-yield day, flagged as intended.
 - 20260326 exp1 (four_bank_even, 38 GB): 165 units, 52 good, 21.5 min total (~0.57 min/GB; estimate of 1.2 min/GB is conservative).
 Full chronological batch started afterwards (no --until; stop with `SpikeSort/STOP`).
+
+### Batch status 2026-10-29 07:55 and staging collision bug
+Done so far: 20251010 exp3 (721 units/87 good, 179 min), 20251016 exp1 (582/106), 20251022 exp1 (749/138, four_bank_even),
+20260224 Record Node 110 exp1 (434/11 good, custom_sparse, 59 min), plus earlier tests 0303 exp1, 0326 exp1, 20251010 exp1/exp2.
+`many_units` flag (> 1.5 units/channel) on the three big single-column/four-bank sessions; counts are 1.5-2 units/ch with
+87-138 good units, so the threshold is probably too tight, not a failure (unreviewed).
+FAILED: 20260224 exp1 (flat) and 20260226 exp1: staged_root put all experiments of a day (and Record-Node subfolders) in one
+folder, so the prefetch of the next session (same day) was being copied while neo scanned that folder for the current one
+("mmap length is greater than file size" / missing timestamps.npy). Fix: `stage_raw.staged_root` = day/exp<N>[__<node>], one folder
+per session (siblings, no nesting). The running batch (old code) was asked to stop after its current session (STOP file) to be
+restarted with the fix; failed sessions have no DONE.json so the restart picks them up again.

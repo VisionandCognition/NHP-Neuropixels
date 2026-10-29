@@ -21,6 +21,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import config
+from find_recordings import exp_number
 
 log = logging.getLogger("stage_raw")
 
@@ -31,9 +32,11 @@ def _node_slug(node):
 
 def staged_root(row):
     """Local mirror of the Record-Node folder (holds experimentN/ and settings*.xml)."""
-    d = config.STAGE_ROOT / row["monkey"] / row["day"]
+    # One folder per experiment: the reader scans every experimentN/ under its root, so a sibling
+    # experiment (or Record-Node folder) that is still being copied ahead (prefetch) would break it.
     slug = _node_slug(row["node"])
-    return d / slug if slug else d
+    name = "exp%d" % exp_number(row) + ("__" + slug if slug else "")
+    return config.STAGE_ROOT / row["monkey"] / row["day"] / name
 
 
 def _rsync(src, dst, *extra):
