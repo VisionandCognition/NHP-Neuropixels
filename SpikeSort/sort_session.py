@@ -146,6 +146,9 @@ def preprocess(si, rec):
     noise = si.get_noise_levels(ref, return_scaled=False, method="std")
     loud = ref.channel_ids[noise > pp["max_noise_ratio"] * np.median(noise)]
     bad_ids = np.unique(np.concatenate([np.asarray(bad_ids), np.asarray(loud)])) if len(loud) else bad_ids
+    forced = [c for c in ref.channel_ids if str(c) in pp.get("always_bad", ())]
+    if forced:
+        bad_ids = np.unique(np.concatenate([np.asarray(bad_ids), np.asarray(forced)]))
     log.info("bad channels removed: %d (%s)", len(bad_ids),
              {k: int((labels == k).sum()) for k in np.unique(labels)})
     if len(bad_ids):

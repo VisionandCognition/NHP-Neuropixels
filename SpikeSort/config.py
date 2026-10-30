@@ -40,6 +40,7 @@ PREPROC = dict(
     highpass_hz=300.0,
     std_mad_threshold=3,   # SI default 5 missed a 3.4x-noisy channel (m032 20251010 ch300); 0 flags on 4 other pilot days
     min_patch_channels=8,  # drop isolated channels (patches < 8 ch along the shank) for sorting; they cannot support template matching
+    always_bad=("AP191",),  # ADC channel 191 gives hundreds of junk "units" on most days regardless of electrode (10 of 13 sessions)
     max_noise_ratio=3.0,   # also drop channels whose std exceeds this x the probe median (after referencing)
     bad_channel_method="mad",   # "coherence+psd" (IBL, mouse-tuned) flagged all 384 ch on noisy NHP days (20260323)
     reference="median",   # "median" | "destripe" (spatial high-pass, as in XinyuScripts/getmua.m)
@@ -71,7 +72,7 @@ KS4_PROFILES = {p: dict(DMINX) for p in
                 ("dense_bankA", "single_column", "four_bank_even", "custom_contiguous", "custom_sparse")}
 
 # Provisional sanity flags written to the manifest (not yet calibrated on NHP data).
-SANITY = dict(min_units=20, max_units_per_channel=1.5, min_good_frac=0.02, min_spikes_per_s_per_ch=0.05)
+SANITY = dict(min_units=20, max_units_per_channel=2.5, min_good_frac=0.02, min_spikes_per_s_per_ch=0.05)
 
 # --- curation ---------------------------------------------------------------------------
 # A unit is flagged `good` (candidate single unit) if it passes ALL of these.

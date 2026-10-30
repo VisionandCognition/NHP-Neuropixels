@@ -171,3 +171,15 @@ folder, so the prefetch of the next session (same day) was being copied while ne
 ("mmap length is greater than file size" / missing timestamps.npy). Fix: `stage_raw.staged_root` = day/exp<N>[__<node>], one folder
 per session (siblings, no nesting). The running batch (old code) was asked to stop after its current session (STOP file) to be
 restarted with the fix; failed sessions have no DONE.json so the restart picks them up again.
+
+### Batch review 2026-10-30: AP191 and 20260312
+- **AP191 is a bad ADC channel on most days**, independent of electrode config: units peaking there per session: 1010 exp2 349 (pre-fix),
+  0310 106, 0317 91, 0303 exp3 70, 0326 57, 0226 exp2 47, 0303 exp2 43, 0226 exp1 25, 0224 17, 0312 17, 0303 exp1 10 (clean: 1010 exp3, 1022).
+  On 0310 these units have 6x the amplitude of others, 0.04 Hz, ISI-violation ratio ~270, i.e. rare large transients; the channel's
+  median-based noise is normal (0.7x), so the noise rules do not catch it. `PREPROC.always_bad=("AP191",)` now always drops it.
+  AP300 was noisy only on 20251010. Sessions already done keep their AP191 clutter units (flaggable post hoc via peak_channel_id).
+- `max_units_per_channel` 1.5 -> 2.5 (flag fired on nearly every session).
+- **20260312 exp1** (1539 units, 26 good): not noise. 159 min in 15 recordings; spike rate stable but the unit population turns over:
+  only 13 % of units active (>= 20 spikes) in every recording (other days 32-66 %), 30 % in <= 3 recordings. Kilosort's drift
+  correction does not bridge abrupt changes between recordings, so units are split by time -> low presence_ratio (median 0.53).
+  Cure would be per-recording sorting + unit matching; not done. Treat this day's units with care; MUA unaffected.
