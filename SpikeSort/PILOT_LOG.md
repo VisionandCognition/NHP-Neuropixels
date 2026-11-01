@@ -183,3 +183,11 @@ restarted with the fix; failed sessions have no DONE.json so the restart picks t
   only 13 % of units active (>= 20 spikes) in every recording (other days 32-66 %), 30 % in <= 3 recordings. Kilosort's drift
   correction does not bridge abrupt changes between recordings, so units are split by time -> low presence_ratio (median 0.53).
   Cure would be per-recording sorting + unit matching; not done. Treat this day's units with care; MUA unaffected.
+
+## 2026-11-01 curation tiers
+Literature check (Trautmann+ 2025 Nat Neurosci; Allen docs; macaque V1 eLife preprint): NHP work uses Kilosort + light
+Phy curation, no automatic presence cutoff. Our `good` (presence>0.9 over whole concatenated session) is stricter.
+Added `curation.add_tiers` -> units.csv columns `usable` (SNR>3, ISI<0.5, ampcut<0.1 or NaN, >=100 spikes, no presence),
+`su_like` (usable & ISI<0.1), `tier` (artifact > good > usable > other). `artifact` = peak on always_bad (AP191).
+`good` column unchanged. `backfill_tiers.py` applies to finished sessions, writes `_tiers_summary.csv`.
+New sorts get the columns automatically (sort_session.unit_table).

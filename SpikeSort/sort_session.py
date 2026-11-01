@@ -25,6 +25,7 @@ import numpy as np
 import pandas as pd
 
 import config
+import curation
 import export_spikes
 import geometry
 import stage_raw
@@ -236,6 +237,8 @@ def unit_table(si, an, rec_saved, sorter_out):
                  & (q["isi_violations_ratio"] < c["isi_violations_ratio_max"])
                  & (q["presence_ratio"] > c["presence_ratio_min"])
                  & (q["snr"] > c["snr_min"])).astype(int)
+
+    curation.add_tiers(q)
 
     q["ks_label"] = ""
     tsv = Path(sorter_out) / "cluster_KSLabel.tsv"

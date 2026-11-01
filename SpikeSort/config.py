@@ -83,6 +83,19 @@ CURATION = dict(
     presence_ratio_min=0.9,
     snr_min=3.0,
 )
+# `usable` tier: no presence criterion (long, drifting NHP sessions; published NHP work -- e.g. Trautmann
+# et al. 2025 -- uses Kilosort + light manual curation, no automatic presence cutoff). Amplitude cutoff
+# is NaN for units with too few spikes; NaN passes here. Units peaking on PREPROC["always_bad"]
+# channels (hardware artefact) never qualify.
+USABLE = dict(
+    amplitude_cutoff_max=0.1,
+    isi_violations_ratio_max=0.5,
+    snr_min=3.0,
+    min_spikes=100,
+)
+# `su_like` = usable and ISI violations below this (stricter refractory-period test).
+SU_ISI_MAX = 0.1
+
 # Also label units with the SpikeInterface UnitRefine models (needs internet + skops, and
 # extra metrics -> slower). Models were trained on mouse; treat as advisory. UNTESTED.
 UNITREFINE = False
