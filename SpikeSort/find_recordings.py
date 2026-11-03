@@ -86,6 +86,40 @@ def scan_all(root):
     return rows
 
 
+def write_inventory(rows, out):
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(str(out), "w", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+
+
+def scan_all_cached(root, inventory, rescan=False):
+    """scan_all, but reuse rows from the inventory CSV for day folders whose own mtime is older than the
+    inventory file (the recursive walk over the share takes ~30 min). New or touched days are rescanned and
+    the inventory is rewritten; rescan=True forces a full walk."""
+    inventory = Path(inventory)
+    old = {}
+    if inventory.is_file() and not rescan:
+        with open(str(inventory), newline="") as f:
+            for r in csv.DictReader(f):
+                old.setdefault((r["monkey"], r["day"]), []).append(r)
+    stamp = inventory.stat().st_mtime if old else 0
+    rows, changed = [], False
+    for monkey in sorted(p for p in Path(root).iterdir() if p.is_dir() and re.fullmatch(r"m\d+", p.name)):
+        for day in sorted(p for p in monkey.iterdir() if p.is_dir() and re.fullmatch(r"\d{8}", p.name)):
+            key = (monkey.name, day.name)
+            if key in old and day.stat().st_mtime < stamp:
+                rows.extend(old[key])
+            else:
+                rows.extend(scan_day(day, monkey.name))
+                changed = True
+    if changed or len(rows) != sum(len(v) for v in old.values()):
+        write_inventory(rows, inventory)
+    return rows
+
+
 def rec_number(row):
     return int(re.sub(r"\D", "", row["recording"]))
 

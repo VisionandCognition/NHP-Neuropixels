@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import config
-from find_recordings import exp_number, scan_all
+from find_recordings import exp_number, scan_all_cached
 import sort_session as ss
 import stage_raw
 
@@ -93,11 +93,12 @@ def main():
     ap.add_argument("--list", action="store_true")
     ap.add_argument("--only", action="append", metavar="DAY:EXP", help="restrict to these sessions, e.g. 20260303:1 (repeatable)")
     ap.add_argument("--until", metavar="HH:MM", help="do not start a session that would end after this time")
+    ap.add_argument("--rescan", action="store_true", help="ignore the cached inventory and walk the whole share (~30 min)")
     ap.add_argument("--no-prefetch", action="store_true", help="do not stage the next session during a sort")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    units = sort_units(scan_all(config.DATA_COLLECTION))
+    units = sort_units(scan_all_cached(config.DATA_COLLECTION, config.INVENTORY, args.rescan))
     todo = []
     for (monkey, day, node, exp_n), recs in units.items():
         if (args.monkey and monkey != args.monkey) or (args.day and day != args.day):
