@@ -78146,3 +78146,4 @@ kilosort4 run time 12664.28s
 /home/chris/anaconda3/envs/kilosort/lib/python3.9/site-packages/spikeinterface/qualitymetrics/misc_metrics.py:1059: UserWarning: Some units have too few spikes : amplitude_cutoff is set to NaN
   warnings.warn(f"Some units have too few spikes : amplitude_cutoff is set to NaN")
 2026-11-03 01:17:20,854 INFO done: 527 units (41 good) in 394.6 min -> /media/NETDISKS/VS03/VS03_6/Neuropixels_NHP/Data_analysis/SpikeSorting/m032/20260918/exp1
+2026-11-03 08:18:02,217 INFO staging 7 recordings (82.9 GB) -> /media/DATA1/spikesort_raw/m032/20260910/exp2 with 2 streams
