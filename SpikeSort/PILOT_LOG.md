@@ -191,3 +191,12 @@ Added `curation.add_tiers` -> units.csv columns `usable` (SNR>3, ISI<0.5, ampcut
 `su_like` (usable & ISI<0.1), `tier` (artifact > good > usable > other). `artifact` = peak on always_bad (AP191).
 `good` column unchanged. `backfill_tiers.py` applies to finished sessions, writes `_tiers_summary.csv`.
 New sorts get the columns automatically (sort_session.unit_table).
+
+## 2026-11-03 batch complete
+- Desktop session was killed (Ctrl+Alt+Backspace) on 2 Nov during 20260918 exp1; batch relaunched detached (`setsid nohup python run_batch.py`),
+  finished 20260918 exp1 at 01:17 (527 units, 41 good, 395 min). Note: `run_batch.py` start-up scan (`rglob("recording*")` over the share,
+  includes code folders such as MS_code) takes ~25-30 min before the first sort begins.
+- **20260910 exp2 fixed** ("no probe geometry attached"): that day's second settings file is `settings2.xml`, but neo only reads
+  `settings_<N>.xml`. `stage_raw.stage_rows` now also writes a `settings_<N>.xml` copy in the local stage (server untouched).
+  Sorted OK: 163 units, 7 good, 58 min.
+- All 33 finished sessions in `_manifest.csv` are `ok`. `backfill_tiers.py` rerun: the 6 sessions finished after 1 Nov now have usable/su_like/tier columns.
