@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import logging
 import threading
 import time
@@ -84,6 +85,19 @@ def log_manifest(**kw):
         w.writerow(dict({k: "" for k in MANIFEST_FIELDS}, time=datetime.now().isoformat(timespec="seconds"), **kw))
 
 
+STATUS_FILE = Path(__file__).parent / "logs" / "batch_status.json"
+
+
+def write_status(state, current=None, ok=(), failed=(), pending=0):
+    """Small heartbeat file (state: running | finished | stopped) for checking the batch from elsewhere."""
+    try:
+        STATUS_FILE.write_text(json.dumps(dict(
+            state=state, updated=datetime.now().isoformat(timespec="seconds"), current=current,
+            n_ok=len(ok), n_failed=len(failed), n_pending=pending, ok=list(ok), failed=list(failed)), indent=1))
+    except OSError:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--monkey")
@@ -123,10 +137,13 @@ def main():
     if deadline:
         log.info("batch window ends %s", deadline.strftime("%Y-%m-%d %H:%M"))
     pending = list(todo)
+    ok_sessions, failed_sessions = [], []
+    end_state = "finished"
     prefetched = None            # (key, thread) of the session staged ahead
     while pending:
         if STOP_FILE.exists():
             log.info("STOP file found, ending batch (remove %s to run again)", STOP_FILE)
+            end_state = "stopped"
             break
         pick = None
         for k, item in enumerate(pending):      # chronological, first one that fits the window
@@ -135,9 +152,12 @@ def main():
                 break
         if pick is None:
             log.info("no remaining session fits before %s, ending batch", deadline.strftime("%H:%M"))
+            end_state = "stopped"
             break
         monkey, day, node, exp_n, gb = pending.pop(pick)
         key = (monkey, day, node, exp_n)
+        label = "%s %s exp%d" % (monkey, day, exp_n)
+        write_status("running", label, ok_sessions, failed_sessions, len(pending))
         if prefetched:
             prefetched[1].join()                  # never copy two sessions at once
         prefetched = None
@@ -157,13 +177,16 @@ def main():
             res = ss.sort_session(monkey, day, exp_n, node)
             log_manifest(monkey=monkey, day=day, node=node, experiment=exp_n, status="ok",
                          n_units=res["n_units"], n_good=res["n_good"], profile=res["profile"], flags=res["flags"])
+            ok_sessions.append(label)
         except Exception as e:
             log.error("FAILED %s %s exp%d: %s\n%s", monkey, day, exp_n, e, traceback.format_exc())
             log_manifest(monkey=monkey, day=day, node=node, experiment=exp_n, status="failed",
                          error=str(e)[:300])
+            failed_sessions.append(label)
         finally:
             log.removeHandler(fh)
             fh.close()
+    write_status(end_state, None, ok_sessions, failed_sessions, len(pending))
     if prefetched:
         prefetched[1].join()
         log.info("note: %s %s %s exp%d is staged in %s but not sorted (next run reuses it)", *prefetched[0], config.STAGE_ROOT)
