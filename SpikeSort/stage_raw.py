@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -100,6 +101,9 @@ def stage_rows(rows, streams=None):
     dst_root.mkdir(parents=True, exist_ok=True)
     for x in src_root.glob("settings*.xml"):
         shutil.copy2(str(x), str(dst_root / x.name))
+        m = re.fullmatch(r"settings(\d+)\.xml", x.name)    # neo only reads settings_<N>.xml (20260910 has settings2.xml)
+        if m:
+            shutil.copy2(str(x), str(dst_root / ("settings_%s.xml" % m.group(1))))
     total = sum(int(r["ap_bytes"]) for r in rows) / 1e9
     log.info("staging %d recordings (%.1f GB) -> %s with %d streams", len(rows), total, dst_root, streams)
     with ThreadPoolExecutor(max_workers=streams) as ex:
