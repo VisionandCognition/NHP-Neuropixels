@@ -1,0 +1,10 @@
+{
+ "state": "running",
+ "updated": "2026-11-03T10:18:15",
+ "current": "m032 20251010 exp1",
+ "n_ok": 0,
+ "n_failed": 0,
+ "n_pending": 16,
+ "ok": [],
+ "failed": []
+}

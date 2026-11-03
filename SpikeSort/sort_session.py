@@ -306,11 +306,16 @@ def package_versions():
 
 
 def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=False, dry_run=False,
-                 phy=False, resume=False):
+                 phy=False, resume=False, rec_subset=None, tag="", keep_stage=False):
+    """rec_subset: sort only these recordings (names, e.g. ["recording3"]); tag: suffix for the output/scratch
+    folder (e.g. "rec3"); keep_stage: leave the staged raw copy in place for the next call (per-recording runs)."""
     t0 = time.time()
     out = out_dir_for(monkey, day, exp_n, node)
+    if tag:
+        out = out.with_name(out.name + "__" + tag)
     rows = select_recordings(monkey, day, exp_n, node)
-    keep_idx = [i for i, r in enumerate(rows) if float(r["duration_s"]) >= config.MIN_RECORDING_S]
+    keep_idx = [i for i, r in enumerate(rows) if float(r["duration_s"]) >= config.MIN_RECORDING_S
+                and (rec_subset is None or r["recording"] in rec_subset)]
     if not keep_idx:
         raise RuntimeError("all recordings shorter than %.0f s" % config.MIN_RECORDING_S)
     dropped = [rows[i]["recording"] for i in range(len(rows)) if i not in keep_idx]
@@ -321,7 +326,7 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
     if dry_run:
         return None
 
-    scratch = config.SCRATCH / ("%s_%s_%s" % (monkey, day, session_name(exp_n, node)))
+    scratch = config.SCRATCH / ("%s_%s_%s" % (monkey, day, session_name(exp_n, node) + ("__" + tag if tag else "")))
     scratch.mkdir(parents=True, exist_ok=True)
     need_gb = (2.3 if config.STAGE else 1.3) * total_gb   # staged raw + preprocessed copy
     free_gb = shutil.disk_usage(str(scratch)).free / 1e9
@@ -430,7 +435,7 @@ def sort_session(monkey, day, exp_n, node=".", ks_overrides=None, keep_scratch=F
                                                    finished=provenance["finished"])))
     if not keep_scratch:
         shutil.rmtree(str(scratch), ignore_errors=True)
-        if config.STAGE:
+        if config.STAGE and not keep_stage:
             stage_raw.remove_staged(rows)
     log.info("done: %d units (%d good) in %.1f min -> %s", n_units, n_good, (time.time() - t0) / 60, out)
     return dict(n_units=n_units, n_good=n_good, out=str(out), profile=geom["profile"], flags=";".join(flags))
