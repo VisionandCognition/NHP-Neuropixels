@@ -200,3 +200,15 @@ New sorts get the columns automatically (sort_session.unit_table).
   `settings_<N>.xml`. `stage_raw.stage_rows` now also writes a `settings_<N>.xml` copy in the local stage (server untouched).
   Sorted OK: 163 units, 7 good, 58 min.
 - All 33 finished sessions in `_manifest.csv` are `ok`. `backfill_tiers.py` rerun: the 6 sessions finished after 1 Nov now have usable/su_like/tier columns.
+
+## 2026-11-03 per-recording sort + unit linking, 20260312 exp1 (`sort_perrec.py`, `match_units.py`)
+- 15 recordings sorted separately (shortest first, 306 min total, staged once; 400-870 units each) into `exp1__rec<N>/`, then linked
+  across recordings into `exp1__matched/` (unit_matches.csv, linked_units.csv, spikes_matched.npz). Original `exp1/` untouched.
+- Linking rule (first guess, untuned): peak position <= 40 um, amplitude ratio within 0.6-1.67, template cosine >= 0.85, Hungarian
+  assignment against units seen in the last 3 recordings, units with >= 50 spikes only. 8910 unit rows -> 4829 linked units;
+  only 46 % of rows linked; accepted-link cosine median 0.93.
+- Of linked units with >= 1 good/usable recording (2223), median spans 1 recording; 890 span >= 2, 512 >= 3, 225 >= 5, 74 >= 8
+  (concatenated sort: 366 usable-tier units). Not clearly "fixed": no ground truth, so whether the rest are genuinely
+  turning-over units or missed links is unknown. Treat as exploratory.
+- `sort_session` gained `rec_subset`, `tag`, `keep_stage`. `run_batch.py` gained inventory caching (`--rescan`) and `logs/batch_status.json`.
+- AP191 re-sort of 16 older sessions (about 52 h GPU) was prepared but held back for the power-test reboot.
