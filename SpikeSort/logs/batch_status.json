@@ -1,10 +1,12 @@
 {
  "state": "running",
- "updated": "2026-11-04T18:10:28",
- "current": "m032 20251010 exp1",
- "n_ok": 0,
+ "updated": "2026-11-04T18:23:11",
+ "current": "m032 20251010 exp2",
+ "n_ok": 1,
  "n_failed": 0,
- "n_pending": 16,
- "ok": [],
+ "n_pending": 15,
+ "ok": [
+  "m032 20251010 exp1"
+ ],
  "failed": []
 }
