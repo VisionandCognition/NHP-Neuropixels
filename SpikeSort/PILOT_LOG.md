@@ -212,3 +212,7 @@ New sorts get the columns automatically (sort_session.unit_table).
   turning-over units or missed links is unknown. Treat as exploratory.
 - `sort_session` gained `rec_subset`, `tag`, `keep_stage`. `run_batch.py` gained inventory caching (`--rescan`) and `logs/batch_status.json`.
 - AP191 re-sort of 16 older sessions (about 52 h GPU) was prepared but held back for the power-test reboot.
+
+## 2026-11-06 AP191 re-sort complete
+- 17 sort units (16 sessions; 20260224 exp1 has a flat and a Record-Node-110 unit) re-sorted with `PREPROC.always_bad=("AP191",)`, started 2026-11-04 18:10, finished
+  2026-11-06 18:55, 0 failures. All sessions now use the same preprocessing; `_tiers_summary.csv` refreshed.

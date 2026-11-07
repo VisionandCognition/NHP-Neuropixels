@@ -1,10 +1,10 @@
 {
- "state": "running",
- "updated": "2026-11-06T12:20:37",
- "current": "m032 20260318 exp1",
- "n_ok": 15,
+ "state": "finished",
+ "updated": "2026-11-06T18:55:18",
+ "current": null,
+ "n_ok": 17,
  "n_failed": 0,
- "n_pending": 1,
+ "n_pending": 0,
  "ok": [
   "m032 20251010 exp1",
   "m032 20251010 exp2",
@@ -20,7 +20,9 @@
   "m032 20260303 exp3",
   "m032 20260310 exp1",
   "m032 20260312 exp1",
-  "m032 20260317 exp1"
+  "m032 20260317 exp1",
+  "m032 20260318 exp1",
+  "m032 20260326 exp1"
  ],
  "failed": []
 }
