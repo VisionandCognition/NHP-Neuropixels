@@ -216,3 +216,17 @@ New sorts get the columns automatically (sort_session.unit_table).
 ## 2026-11-06 AP191 re-sort complete
 - 17 sort units (16 sessions; 20260224 exp1 has a flat and a Record-Node-110 unit) re-sorted with `PREPROC.always_bad=("AP191",)`, started 2026-11-04 18:10, finished
   2026-11-06 18:55, 0 failures. All sessions now use the same preprocessing; `_tiers_summary.csv` refreshed.
+
+## 2026-11-08 — weekend per-recording queue (sort_perrec.py + match_units.py)
+Queue `run_perrec_queue.sh` ran 2026-11-07 15:11 -> 2026-11-08 10:11, exp1 of 20260915, 20260916, 20260918, 20260320, 20260903. 0 failed recordings. Outputs per day: `exp1__rec<N>` and `exp1__matched` (unit_matches.csv, linked_units.csv, spikes_matched.npz) on the share.
+
+| session | recs | unit rows | linked units | eligible | in >=50% of recs |
+|---|---|---|---|---|---|
+| 20260915 | 13 | 2068 | 1218 | 604 | 54 |
+| 20260916 | 7 | 451 | 441 | 52 | 1 |
+| 20260918 | 15 | 2923 | 1014 | 721 | 140 |
+| 20260320 | 15 | 9703 | 2586 | 2398 | 466 |
+| 20260903 | 14 | 3021 | 1508 | 999 | 92 |
+
+Accepted-link cosine similarity median 0.94-0.99. Thresholds still untuned (no ground truth).
+Interpretation (user): units NOT persisting across a whole multi-hour session is expected, not a defect. Units present in only one or a few recordings are valid. Do not use "present in >=50% of recordings" as a quality criterion; per-recording sorts are the primary result, linking is an optional add-on.
